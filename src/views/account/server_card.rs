@@ -22,6 +22,11 @@ pub fn server_card(
     hovered: bool,
     prev_h: f32,
     target_h: f32,
+    // Bottom-shadow alpha to ease from/to this frame. `from == to` means no
+    // change (a resting card), so its animation is a no-op — caller computes
+    // these from the card's previous alpha so only the changing card animates.
+    shadow_from: f32,
+    shadow_to: f32,
     banner: Option<Arc<Image>>,
     on_select: impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
     on_hover: impl Fn(&bool, &mut Window, &mut gpui::App) + 'static,
@@ -95,9 +100,10 @@ pub fn server_card(
             ));
 
         // Bottom inner-shadow band built at full strength; the element opacity
-        // carries the alpha so it can *ease* between rest (0.85) and hover (0.45)
-        // instead of snapping. Active cards keep a static light shadow.
-        let bottom_base = div()
+        // carries the alpha so it can *ease* between rest/hover/active states
+        // instead of snapping. Keyed on the target so a resting card (from==to)
+        // holds steady and never re-animates when siblings re-render.
+        let bottom_band = div()
             .absolute()
             .bottom_0()
             .left_0()
@@ -107,19 +113,12 @@ pub fn server_card(
                 0.0,
                 linear_color_stop(dark, 0.0),
                 linear_color_stop(dark, 1.0).opacity(0.0),
-            ));
-        let bottom_band = if active {
-            bottom_base.opacity(0.20).into_any_element()
-        } else {
-            let (from, to) = if hovered { (0.85_f32, 0.45) } else { (0.45_f32, 0.85) };
-            bottom_base
-                .with_animation(
-                    SharedString::from(format!("card-shadow-{id}-{hovered}")),
-                    Animation::new(Duration::from_millis(150)).with_easing(ease_in_out),
-                    move |this, t| this.opacity(from + (to - from) * t),
-                )
-                .into_any_element()
-        };
+            ))
+            .with_animation(
+                SharedString::from(format!("card-shadow-{id}-{shadow_to}")),
+                Animation::new(Duration::from_millis(150)).with_easing(ease_in_out),
+                move |this, t| this.opacity(shadow_from + (shadow_to - shadow_from) * t),
+            );
 
         card = card.child(top_band).child(bottom_band);
     }

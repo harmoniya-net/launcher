@@ -25,6 +25,17 @@ const H_HOVER_BUMP: f32 = 14.0;
 /// Keep in sync with the duration used in server_card.
 const ANIM_MS: f32 = 140.0;
 
+/// Fixed width for the card column inside the (448px) sidebar. Pinning it keeps
+/// a constant gutter for the scrollbar so the cards never reflow narrower when
+/// the scrollbar appears (e.g. mid height-animation as a card grows).
+const CARD_COL_W: f32 = 424.0;
+
+/// Bottom-shadow alpha per visual state (see server_card); tracked so only the
+/// card whose state changed animates.
+const SHADOW_REST: f32 = 0.85;
+const SHADOW_HOVER: f32 = 0.45;
+const SHADOW_ACTIVE: f32 = 0.20;
+
 /// Per-card animation state. `source` is where the current tween started,
 /// `target` is where it's heading, and `started_at` lets us compute the actual
 /// in-flight position when target changes mid-animation — without it, a fresh
@@ -39,13 +50,16 @@ fn ease_in_out(t: f32) -> f32 {
 pub struct ServerList {
     state: Entity<AppState>,
     heights: HashMap<String, CardHeight>,
+    /// Last bottom-shadow alpha rendered per card, so the next render can ease
+    /// from it — and resting cards (unchanged) pass `from == to` and don't animate.
+    shadow_alpha: HashMap<String, f32>,
     hovered_id: Option<String>,
 }
 
 impl ServerList {
     pub fn new(state: Entity<AppState>, cx: &mut Context<Self>) -> Self {
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
-        Self { state, heights: HashMap::new(), hovered_id: None }
+        Self { state, heights: HashMap::new(), shadow_alpha: HashMap::new(), hovered_id: None }
     }
 }
 
@@ -133,6 +147,18 @@ impl ServerList {
                 self.heights.insert(m.id.clone(), curr_state);
                 let prev = curr_state.source;
 
+                // Shadow target for this state; ease from the last rendered alpha
+                // (so only the card that changed animates).
+                let shadow_to = if active {
+                    SHADOW_ACTIVE
+                } else if is_hovered {
+                    SHADOW_HOVER
+                } else {
+                    SHADOW_REST
+                };
+                let shadow_from = self.shadow_alpha.get(&m.id).copied().unwrap_or(shadow_to);
+                self.shadow_alpha.insert(m.id.clone(), shadow_to);
+
                 let id = m.id.clone();
                 let banner = m
                     .banner
@@ -160,6 +186,8 @@ impl ServerList {
                     is_hovered,
                     prev,
                     target,
+                    shadow_from,
+                    shadow_to,
                     banner,
                     move |_, _, cx| {
                         handle.update(cx, |s, cx| {
@@ -171,7 +199,14 @@ impl ServerList {
             }),
         );
 
-        div().flex().flex_col().gap(px(12.)).child(header).child(cards).into_any_element()
+        div()
+            .flex()
+            .flex_col()
+            .w(px(CARD_COL_W))
+            .gap(px(12.))
+            .child(header)
+            .child(cards)
+            .into_any_element()
     }
 }
 
@@ -192,10 +227,6 @@ impl Render for ServerList {
             .flex_col()
             .gap(px(16.))
             .size_full()
-            // Reserve a fixed gutter for the scrollbar so it never reflows the
-            // card width when it appears (e.g. mid-animation as a card grows on
-            // select/hover).
-            .pr(px(8.))
             .overflow_y_scroll();
 
         if loading && groups.is_empty() {
