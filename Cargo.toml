@@ -1,0 +1,111 @@
+[package]
+name = "harmoniya-launcher"
+version = "0.3.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "harmoniya-launcher"
+path = "src/main.rs"
+
+[dependencies]
+gpui = "0.2"
+
+reqwest = { version = "0.12", default-features = false, features = [
+  "rustls-tls",
+  "json",
+  "gzip",
+  "multipart",
+  "stream",
+] }
+tokio = { version = "1", features = ["rt-multi-thread", "time"] }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+tiny_http = "0.12"
+open = "5"
+native-dialog = "0.9"
+
+directories = "5"
+keyring = { version = "3", default-features = false, features = [
+  "sync-secret-service",
+  "vendored",
+  "apple-native",
+  "windows-native",
+] }
+
+pulldown-cmark = { version = "0.12", default-features = false }
+image = { version = "0.25", default-features = false, features = [
+  "png",
+  "jpeg",
+  "webp",
+] }
+
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.8"
+url = "2"
+serde_urlencoded = "0.7"
+percent-encoding = "2"
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+
+self_update = { version = "0.41", default-features = false, features = [
+  "rustls",
+  "compression-flate2",
+  "archive-tar",
+] }
+
+anyhow = "1"
+thiserror = "1"
+futures = "0.3"
+http_client = { package = "gpui_http_client", version = "0.2" }
+http = "1"
+bytes = "1"
+time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
+opys-runtime = "0.1.7"
+indexmap = "2.14.0"
+emojis = "0.8.2"
+unicode-segmentation = "1.13.2"
+resvg = "0.47.0"
+
+# [profile.release]
+# lto = "thin"
+# codegen-units = 1
+# strip = "symbols"
+
+[profile.release]
+lto = false         # Disable Link Time Optimization
+codegen-units = 256 # Compile code in parallel chunks
+debug = false       # Omit debug symbols
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+# Tray: ksni (StatusNotifierItem over D-Bus) on Linux — no GTK loop, unlike
+# tray-icon's Linux backend, so it doesn't fight GPUI's own Linux event loop.
+# blocking + async-io (not the default tokio backend): ksni's tokio backend
+# panics in zbus (`Handle::current`) when a menu item is clicked off-runtime.
+[target.'cfg(target_os = "linux")'.dependencies]
+ksni = { version = "0.3.4", default-features = false, features = ["blocking", "async-io"] }
+
+# Graceful SIGTERM to the game process on quit (tokio's Child only does SIGKILL).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+# macOS/Windows use tray-icon, created on the main thread where GPUI pumps the
+# native run loop, so its menu/click events are delivered.
+[target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
+tray-icon = "0.24.0"
+
+# True hide-to-tray on Windows: SW_HIDE via the raw HWND (App::hide is a no-op
+# there, and minimize only parks it in the taskbar).
+[target.'cfg(target_os = "windows")'.dependencies]
+raw-window-handle = "0.6"
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_UI_WindowsAndMessaging",
+] }

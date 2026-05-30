@@ -1,0 +1,126 @@
+# CI/CD for the Harmoniya launcher (GPUI / Rust).
+#
+# Cut a release by pushing a tag, e.g.:
+#     git tag v0.3.1 && git push origin v0.3.1
+# That builds Linux + Windows binaries and publishes them to GitLab Releases.
+# The launcher self-updater (src/update.rs, GitLab backend) downloads the asset
+# whose name contains the running target triple — so the asset NAMES below must
+# stay stable, and the tag must match `version` in Cargo.toml (self_update
+# compares them as semver, ignoring a leading `v`).
+#
+# Linux builds on the default Linux shared runners. Windows MUST build on a
+# native Windows runner: gpui's build.rs compiles HLSL shaders with fxc.exe and
+# is gated on the *host* being Windows, so it can't be cross-compiled from Linux.
+# build:windows targets GitLab's SaaS Windows runners (tag
+# `saas-windows-medium-amd64`); enable those on the project, or register a
+# self-hosted Windows runner carrying that tag.
+
+stages: [check, build, release]
+
+variables:
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  CARGO_TERM_COLOR: "always"
+  # Generic Package Registry base the release asset links point at.
+  PKG_BASE: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/launcher/${CI_COMMIT_TAG}"
+  LINUX_ASSET: "harmoniya-launcher-x86_64-unknown-linux-gnu.tar.gz"
+  WINDOWS_ASSET: "harmoniya-launcher-x86_64-pc-windows-msvc.tar.gz"
+
+default:
+  image: rust:1.90-bookworm
+  cache:
+    key: "$CI_JOB_NAME"
+    paths:
+      - .cargo/registry/
+      - .cargo/bin/
+      - target/
+
+# System libraries GPUI links on Linux (xcb + xkbcommon); also needed by
+# `cargo check` because the xcb crates probe them via pkg-config.
+.linux_deps: &linux_deps
+  - apt-get update
+  - >
+    apt-get install -y --no-install-recommends
+    pkg-config cmake clang curl
+    libxcb1-dev libxcb-xkb-dev libxkbcommon-dev libxkbcommon-x11-dev
+    libwayland-dev libxau-dev libxdmcp-dev
+
+# --- branch / MR feedback: type + borrow check (no linking) -----------------
+check:
+  stage: check
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+  before_script: *linux_deps
+  script:
+    - cargo check --locked
+
+# --- Linux release binary ---------------------------------------------------
+build:linux:
+  stage: build
+  rules:
+    - if: $CI_COMMIT_TAG
+  before_script: *linux_deps
+  script:
+    - cargo build --release --locked --target x86_64-unknown-linux-gnu
+    - install -D target/x86_64-unknown-linux-gnu/release/harmoniya-launcher dist/harmoniya-launcher
+    - tar -C dist -czf "$LINUX_ASSET" harmoniya-launcher
+    - 'curl --fail --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "$LINUX_ASSET" "$PKG_BASE/$LINUX_ASSET"'
+  artifacts:
+    paths: ["$LINUX_ASSET"]
+    expire_in: 1 week
+
+# --- Windows release binary (native MSVC build on a Windows runner) ---------
+# Runs on a SaaS Windows runner (PowerShell). gpui needs fxc.exe from the
+# Windows SDK at build time; the VS Build Tools on that image provide it (set
+# GPUI_FXC_PATH if it can't be found). NOTE: not yet exercised in CI — the first
+# tagged pipeline will validate it.
+build:windows:
+  stage: build
+  rules:
+    - if: $CI_COMMIT_TAG
+  tags: [saas-windows-medium-amd64]
+  variables:
+    CARGO_HOME: "$CI_PROJECT_DIR\\.cargo"
+  cache:
+    key: "$CI_JOB_NAME"
+    paths:
+      - .cargo/registry/
+      - target/
+  before_script:
+    - Invoke-WebRequest -Uri 'https://win.rustup.rs/x86_64' -OutFile 'rustup-init.exe'
+    - .\rustup-init.exe -y --profile minimal --default-toolchain 1.90.0
+    - $env:Path = "$env:CARGO_HOME\bin;$env:Path"
+    - rustc --version
+  script:
+    - cargo build --release --locked
+    - New-Item -ItemType Directory -Force -Path dist | Out-Null
+    - Copy-Item 'target\release\harmoniya-launcher.exe' 'dist\harmoniya-launcher.exe'
+    - tar -C dist -czf "$env:WINDOWS_ASSET" harmoniya-launcher.exe
+    - 'curl.exe --fail --header "JOB-TOKEN: $env:CI_JOB_TOKEN" --upload-file "$env:WINDOWS_ASSET" "$env:PKG_BASE/$env:WINDOWS_ASSET"'
+  artifacts:
+    paths: ["$WINDOWS_ASSET"]
+    expire_in: 1 week
+
+# --- publish a GitLab Release linking the uploaded assets -------------------
+release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  rules:
+    - if: $CI_COMMIT_TAG
+  needs:
+    - build:linux
+    - build:windows
+  script:
+    - echo "Publishing release $CI_COMMIT_TAG"
+  release:
+    tag_name: "$CI_COMMIT_TAG"
+    name: "$CI_COMMIT_TAG"
+    description: "Automated release for $CI_COMMIT_TAG."
+    assets:
+      links:
+        - name: "$LINUX_ASSET"
+          url: "$PKG_BASE/$LINUX_ASSET"
+        - name: "$WINDOWS_ASSET"
+          url: "$PKG_BASE/$WINDOWS_ASSET"
