@@ -22,13 +22,14 @@ const H_ACTIVE: f32 = 200.0;
 const H_ACTIVE_EDGE: f32 = 173.0;
 const H_NEIGHBOR: f32 = 119.0;
 const H_HOVER_BUMP: f32 = 14.0;
+/// Vertical gap between cards within a group.
+const CARD_GAP: f32 = 10.0;
 /// Keep in sync with the duration used in server_card.
 const ANIM_MS: f32 = 140.0;
 
-/// Fixed width for the card column inside the (448px) sidebar. Pinning it keeps
-/// a constant gutter for the scrollbar so the cards never reflow narrower when
-/// the scrollbar appears (e.g. mid height-animation as a card grows).
-const CARD_COL_W: f32 = 424.0;
+/// Fixed width for the card column inside the (448px) sidebar, leaving a 16px
+/// gutter for the scrollbar so cards never reflow when it appears.
+const CARD_COL_W: f32 = 432.0;
 
 /// Bottom-shadow alpha per visual state (see server_card); tracked so only the
 /// card whose state changed animates.
@@ -120,7 +121,19 @@ impl ServerList {
             }
         }
 
-        let cards = div().flex().flex_col().gap(px(10.)).children(
+        // Reserve a constant height for the group so selecting/hovering never
+        // changes the list's total height (which would pop the scrollbar and
+        // shift the layout). Multi-card groups always sum to the baseline (the
+        // active card's growth is stolen from neighbors); a lone card has no
+        // neighbor to steal from, so reserve its active height and let it grow
+        // into the reserved space. Cards animate *within* this fixed slot.
+        let group_content_h = if count <= 1 {
+            H_ACTIVE_EDGE
+        } else {
+            H_NORMAL * count as f32 + CARD_GAP * (count as f32 - 1.0)
+        };
+
+        let cards = div().flex().flex_col().gap(px(CARD_GAP)).h(px(group_content_h)).overflow_hidden().children(
             modpacks.into_iter().enumerate().map(|(i, m)| {
                 let active = active_idx == Some(i);
                 let is_hovered = hover_idx == Some(i);
