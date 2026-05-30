@@ -91,10 +91,25 @@ emojis = "0.8.2"
 unicode-segmentation = "1.13.2"
 resvg = "0.47.0"
 
+# Shipping / CI build (`cargo build --release`): optimize for binary size so the
+# self-update downloads stay small. Slower to compile — use `--profile fast`
+# locally (below) when iterating.
 [profile.release]
-lto = false         # Disable Link Time Optimization
-codegen-units = 256 # Compile code in parallel chunks
-debug = false       # Omit debug symbols
+opt-level = "s"     # optimize for size (use "z" for the smallest, at some speed cost)
+lto = "thin"        # cross-crate inlining/dead-code elimination; "fat" is smaller but much slower to build
+codegen-units = 1   # better optimization & smaller output (no parallel-chunk overhead)
+strip = true        # drop symbols + debuginfo
+debug = false
+
+# Local "see the real experience, fast" build: release-grade runtime speed
+# (opt-level 3) but quick to compile. Run with `cargo run --profile fast`.
+[profile.fast]
+inherits = "release"
+opt-level = 3
+lto = false
+codegen-units = 256
+strip = false
+incremental = true
 
 # Tray: ksni (StatusNotifierItem over D-Bus) on Linux — no GTK loop, unlike
 # tray-icon's Linux backend, so it doesn't fight GPUI's own Linux event loop.
