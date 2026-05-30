@@ -47,10 +47,18 @@ const BANNER_LIT: f32 = 0.85;
 #[derive(Clone, Copy)]
 struct CardHeight { source: f32, target: f32, started_at: Instant }
 
-/// Last-rendered banner + shadow alpha for a card, so the next render eases
-/// from it (and a resting card passes `from == to`, animating nothing).
+/// The banner + shadow ease endpoints currently in flight for a card. Held
+/// across the per-frame re-renders that drive the animation: `*_to` is the
+/// state's target, `*_from` the value the ease started at. Reset only when the
+/// target changes — otherwise re-storing the target every frame would collapse
+/// `from` onto `to` and the ease would snap.
 #[derive(Clone, Copy)]
-struct CardVisual { banner: f32, shadow: f32 }
+struct CardVisual {
+    banner_from: f32,
+    banner_to: f32,
+    shadow_from: f32,
+    shadow_to: f32,
+}
 
 fn ease_in_out(t: f32) -> f32 {
     if t < 0.5 { 2.0 * t * t } else { let x = -2.0 * t + 2.0; 1.0 - x * x / 2.0 }
@@ -168,21 +176,33 @@ impl ServerList {
                 self.heights.insert(m.id.clone(), curr_state);
                 let prev = curr_state.source;
 
-                // Banner + shadow targets for this state; ease from the last
-                // rendered alphas so only the card that changed animates.
-                let (banner_to, shadow_to) = if active {
+                // Banner + shadow targets for this state. Keep the ease
+                // endpoints stable across the per-frame re-renders the height
+                // animation triggers; only restart (from = the previous target)
+                // when the target actually changes, so the ease doesn't snap.
+                let (banner_target, shadow_target) = if active {
                     (BANNER_LIT, SHADOW_ACTIVE)
                 } else if is_hovered {
                     (BANNER_LIT, SHADOW_HOVER)
                 } else {
                     (BANNER_REST, SHADOW_REST)
                 };
-                let prev_vis = self
-                    .visuals
-                    .get(&m.id)
-                    .copied()
-                    .unwrap_or(CardVisual { banner: banner_to, shadow: shadow_to });
-                self.visuals.insert(m.id.clone(), CardVisual { banner: banner_to, shadow: shadow_to });
+                let vis = match self.visuals.get(&m.id).copied() {
+                    Some(p) if p.banner_to == banner_target && p.shadow_to == shadow_target => p,
+                    Some(p) => CardVisual {
+                        banner_from: p.banner_to,
+                        banner_to: banner_target,
+                        shadow_from: p.shadow_to,
+                        shadow_to: shadow_target,
+                    },
+                    None => CardVisual {
+                        banner_from: banner_target,
+                        banner_to: banner_target,
+                        shadow_from: shadow_target,
+                        shadow_to: shadow_target,
+                    },
+                };
+                self.visuals.insert(m.id.clone(), vis);
 
                 let id = m.id.clone();
                 let banner = m
@@ -211,10 +231,10 @@ impl ServerList {
                     is_hovered,
                     prev,
                     target,
-                    prev_vis.banner,
-                    banner_to,
-                    prev_vis.shadow,
-                    shadow_to,
+                    vis.banner_from,
+                    vis.banner_to,
+                    vis.shadow_from,
+                    vis.shadow_to,
                     banner,
                     move |_, _, cx| {
                         handle.update(cx, |s, cx| {
