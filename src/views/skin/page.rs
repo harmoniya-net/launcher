@@ -1,7 +1,8 @@
 use crate::widgets::icon::icon;
 use gpui::{
-    div, px, rgb, AppContext, Context, Entity, FontWeight, InteractiveElement, IntoElement,
-    MouseButton, ParentElement, Render, SharedString, Styled, Window,
+    div, prelude::FluentBuilder, px, rgb, AppContext, Context, Entity, FontWeight,
+    InteractiveElement, IntoElement, MouseButton, ParentElement, Render, SharedString, Styled,
+    Window,
 };
 
 use harmoniya_launch::pipeline as launch;
@@ -159,7 +160,7 @@ fn launcher_settings(
     let is_default = data_dir.is_none();
     let effective = data_dir.unwrap_or_else(launch::default_data_dir);
     let state_pick = state.clone();
-    let state_clear = state.clone();
+    let state_reset = state.clone();
 
     div()
         .flex()
@@ -220,10 +221,31 @@ fn launcher_settings(
                         })
                         .child("Обрати"),
                 )
+                // Reset-to-default sits just left of the path, shown only when a
+                // custom directory is set.
+                .when(!is_default, |row| {
+                    row.child(
+                        div()
+                            .id("reset-dir")
+                            .flex_shrink_0()
+                            .w(px(28.))
+                            .h(px(28.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(Theme::radius_block())
+                            .cursor_pointer()
+                            .hover(|s| s.bg(rgb(0x4a4850)))
+                            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                                state_reset.update(cx, |s, cx| s.set_data_dir(None, cx));
+                            })
+                            .child(icon("icons/rotate-ccw.svg", 15., Theme::text_muted())),
+                    )
+                })
                 .child(
                     div()
                         .flex_1()
-                        .px(px(14.))
+                        .pr(px(14.))
                         .text_size(px(13.))
                         .text_color(Theme::text_faint())
                         .child(if is_default {
@@ -232,24 +254,6 @@ fn launcher_settings(
                             effective.clone()
                         }),
                 ),
-        )
-        .child(
-            div().flex().gap(px(12.)).child(
-                div()
-                    .id("clear-dir")
-                    .px(px(16.))
-                    .py(px(8.))
-                    .rounded(Theme::radius_block())
-                    .bg(Theme::surface_raised())
-                    .text_size(px(13.))
-                    .text_color(Theme::text())
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgb(0x4a4850)))
-                    .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                        state_clear.update(cx, |s, cx| s.set_data_dir(None, cx));
-                    })
-                    .child("Скинути"),
-            ),
         )
         .child(close_to_tray_section(state, close_to_tray))
         .into_any_element()

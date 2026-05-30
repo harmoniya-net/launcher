@@ -120,3 +120,10 @@ windows-sys = { version = "0.59", features = [
   "Win32_Foundation",
   "Win32_UI_WindowsAndMessaging",
 ] }
+
+# Embed the .exe icon (build.rs). cfg(windows) here is the build *host*, so these
+# are pulled only when building on Windows (e.g. the CI Windows runner).
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
+ico = "0.3"
+image = { workspace = true }

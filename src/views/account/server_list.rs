@@ -192,6 +192,10 @@ impl Render for ServerList {
             .flex_col()
             .gap(px(16.))
             .size_full()
+            // Reserve a fixed gutter for the scrollbar so it never reflows the
+            // card width when it appears (e.g. mid-animation as a card grows on
+            // select/hover).
+            .pr(px(8.))
             .overflow_y_scroll();
 
         if loading && groups.is_empty() {

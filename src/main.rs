@@ -1,3 +1,7 @@
+// Don't pop a console window on Windows for the shipped (release) GUI build.
+// Kept in debug so `tracing` console output is still visible during dev.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod app;
 mod assets;
 mod banner;
@@ -72,6 +76,9 @@ fn main() {
                         ..Default::default()
                     }),
                     app_id: Some("net.harmoniya.launcher".into()),
+                    // Below this the two-pane layout (448px sidebar + content)
+                    // starts to crowd; keep the window usable.
+                    window_min_size: Some(size(px(960.), px(640.))),
                     ..Default::default()
                 },
                 move |window, cx| {

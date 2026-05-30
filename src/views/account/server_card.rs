@@ -79,13 +79,6 @@ pub fn server_card(
         // 60% of the card so they overlap slightly in the middle for a smoother
         // transition. Alpha switches via group_hover so the shadow lightens.
         let top_alpha = if active || hovered { 0.80 } else { 0.85 };
-        let bottom_alpha = if active {
-            0.20
-        } else if hovered {
-            0.45
-        } else {
-            0.85
-        };
         let dark = hsla(0.0, 0.0, 0.0, 1.0);
         let band_h = (target_h * 0.9).max(80.0);
 
@@ -101,7 +94,10 @@ pub fn server_card(
                 linear_color_stop(dark, 1.0).opacity(0.0),
             ));
 
-        let bottom_band = div()
+        // Bottom inner-shadow band built at full strength; the element opacity
+        // carries the alpha so it can *ease* between rest (0.85) and hover (0.45)
+        // instead of snapping. Active cards keep a static light shadow.
+        let bottom_base = div()
             .absolute()
             .bottom_0()
             .left_0()
@@ -109,9 +105,21 @@ pub fn server_card(
             .h(px(band_h))
             .bg(linear_gradient(
                 0.0,
-                linear_color_stop(dark, 0.0).opacity(bottom_alpha),
+                linear_color_stop(dark, 0.0),
                 linear_color_stop(dark, 1.0).opacity(0.0),
             ));
+        let bottom_band = if active {
+            bottom_base.opacity(0.20).into_any_element()
+        } else {
+            let (from, to) = if hovered { (0.85_f32, 0.45) } else { (0.45_f32, 0.85) };
+            bottom_base
+                .with_animation(
+                    SharedString::from(format!("card-shadow-{id}-{hovered}")),
+                    Animation::new(Duration::from_millis(150)).with_easing(ease_in_out),
+                    move |this, t| this.opacity(from + (to - from) * t),
+                )
+                .into_any_element()
+        };
 
         card = card.child(top_band).child(bottom_band);
     }
