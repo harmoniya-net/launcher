@@ -11,6 +11,9 @@ use gpui::{
 use harmoniya_api::services::modpacks::Modpack;
 use crate::theme::Theme;
 
+/// Duration of the banner/shadow ease on hover & select. Tune here.
+const HOVER_FADE_MS: u64 = 240;
+
 /// `prev_h` / `target_h`: the height to tween from/to. Caller (ServerList)
 /// computes these based on the card's role in its group (active/neighbor/edge)
 /// and tracks the last rendered height so the animation always starts from the
@@ -77,7 +80,7 @@ pub fn server_card(
             .rounded(Theme::radius_card())
             .with_animation(
                 SharedString::from(format!("card-banner-{id}-{banner_to}")),
-                Animation::new(Duration::from_millis(150)).with_easing(ease_in_out),
+                Animation::new(Duration::from_millis(HOVER_FADE_MS)).with_easing(ease_in_out),
                 move |this, t| this.opacity(banner_from + (banner_to - banner_from) * t),
             );
         card = card.child(banner_img);
@@ -118,7 +121,7 @@ pub fn server_card(
             ))
             .with_animation(
                 SharedString::from(format!("card-shadow-{id}-{shadow_to}")),
-                Animation::new(Duration::from_millis(150)).with_easing(ease_in_out),
+                Animation::new(Duration::from_millis(HOVER_FADE_MS)).with_easing(ease_in_out),
                 move |this, t| this.opacity(shadow_from + (shadow_to - shadow_from) * t),
             );
 
