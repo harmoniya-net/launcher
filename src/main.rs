@@ -21,7 +21,6 @@ mod views;
 mod widgets;
 
 use std::borrow::Cow;
-use std::net::TcpListener;
 use std::sync::Arc;
 
 use futures::StreamExt;
@@ -29,19 +28,21 @@ use gpui::{App, AppContext, Application, Bounds, WindowBounds, WindowOptions, px
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 use crate::app::Root;
-use crate::state::{AppState, MainWindow};
+use crate::state::{AppState, AppStateHandle, MainWindow};
 use crate::tray::TrayCmd;
 
 fn main() {
     init_logging();
 
-    // Single instance: a second launch focuses the running window and exits.
-    let listener = match single_instance::acquire() {
+    // Single instance: a second launch just exits (the guard only does mutual
+    // exclusion — it can't focus the running window). Held for the process's
+    // lifetime; dropping/exiting releases the OS lock.
+    let _instance = match single_instance::acquire() {
         single_instance::Instance::AlreadyRunning => {
-            tracing::info!("another instance is already running; focused it");
+            tracing::info!("another instance is already running; exiting");
             return;
         }
-        single_instance::Instance::Primary(listener) => listener,
+        single_instance::Instance::Primary(guard) => guard,
     };
 
     Application::new().with_assets(assets::Assets).run(move |cx: &mut App| {
@@ -84,9 +85,21 @@ fn main() {
                     ..Default::default()
                 },
                 move |window, cx| {
-                    // Closing the window hides it to the tray instead of quitting.
+                    // Closing the window hides it to the tray when "close to
+                    // tray" is on (the default), otherwise it quits the app.
                     window.on_window_should_close(cx, |window, cx| {
-                        crate::window_ctl::hide(window, cx);
+                        let close_to_tray = cx
+                            .try_global::<AppStateHandle>()
+                            .map(|h| h.0.read(cx).settings.close_to_tray)
+                            .unwrap_or(true);
+                        if close_to_tray {
+                            crate::window_ctl::hide(window, cx);
+                        } else {
+                            begin_quit(cx);
+                        }
+                        // Either way we never let GPUI close the window itself:
+                        // closing the last window stops its loop, which would
+                        // skip the graceful game shutdown that `begin_quit` runs.
                         false
                     });
                     cx.new(|cx| Root::new(state, cx))
@@ -100,8 +113,7 @@ fn main() {
         cx.set_global(MainWindow(handle));
 
         // System tray: toggle/restore the window (it hides on close or launch), or quit.
-        // Also wires the single-instance listener so a second launch focuses us.
-        start_tray(handle, listener, cx);
+        start_tray(handle, cx);
 
         // Backstop: if the app quits some other way than tray Quit, at least
         // SIGTERM the game (the ~100ms quit budget rules out a full graceful wait).
@@ -113,18 +125,10 @@ fn main() {
     });
 }
 
-/// Spin up the tray (and the single-instance focus listener) and forward their
-/// commands onto the GPUI foreground loop.
-fn start_tray(window: gpui::AnyWindowHandle, listener: Option<TcpListener>, cx: &mut App) {
+/// Spin up the tray and forward its commands onto the GPUI foreground loop.
+fn start_tray(window: gpui::AnyWindowHandle, cx: &mut App) {
     let (tx, mut rx) = futures::channel::mpsc::unbounded::<TrayCmd>();
     tray::spawn(tx.clone());
-    // A second instance pinging the loopback port asks us to surface the window.
-    if let Some(listener) = listener {
-        let tx = tx.clone();
-        single_instance::serve(listener, move || {
-            let _ = tx.unbounded_send(TrayCmd::Show);
-        });
-    }
     cx.spawn(async move |cx: &mut gpui::AsyncApp| {
         while let Some(cmd) = rx.next().await {
             match cmd {
@@ -138,18 +142,26 @@ fn start_tray(window: gpui::AnyWindowHandle, listener: Option<TcpListener>, cx: 
                         crate::window_ctl::toggle(window, app)
                     });
                 }
-                TrayCmd::Quit => {
-                    // Stop the game gracefully (SIGTERM, ≤30s, SIGKILL) while the
-                    // launcher is still alive, then exit. We exit the process
-                    // directly: GPUI's Wayland loop doesn't reliably wake on
-                    // `cx.quit()` when triggered from an idle, D-Bus-driven task.
-                    crate::http::on_tokio(crate::game::stop_all()).await;
-                    std::process::exit(0);
-                }
+                TrayCmd::Quit => graceful_quit().await,
             }
         }
     })
     .detach();
+}
+
+/// Stop every running game gracefully (SIGTERM, ≤30s, SIGKILL), then exit. We
+/// exit the process directly rather than via `cx.quit()`: GPUI's Wayland loop
+/// doesn't reliably wake on `cx.quit()` from an idle, D-Bus-driven task. The
+/// `-> !` return lets callers use it as a terminal expression.
+async fn graceful_quit() -> ! {
+    crate::http::on_tokio(crate::game::stop_all()).await;
+    std::process::exit(0);
+}
+
+/// Fire-and-forget [`graceful_quit`] from a synchronous context (the window
+/// close handler). The window stays up until the process exits.
+fn begin_quit(cx: &mut App) {
+    cx.spawn(async move |_cx: &mut gpui::AsyncApp| graceful_quit().await).detach();
 }
 
 fn init_logging() {

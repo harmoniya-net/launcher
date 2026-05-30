@@ -53,7 +53,7 @@ mod linux {
              Type=Application\n\
              Name=Harmoniya\n\
              Comment=Harmoniya game launcher\n\
-             Exec={exe} %U\n\
+             Exec={exe}\n\
              Icon={icon}\n\
              Terminal=false\n\
              Categories=Game;\n\

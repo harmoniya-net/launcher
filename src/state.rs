@@ -39,12 +39,29 @@ pub struct Selection {
     pub selected_modpack_id: Option<String>,
 }
 
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Settings {
     pub data_dir: Option<String>,
     /// Per-modpack option choices (vars + enabled features), keyed by modpack id.
     #[serde(default)]
     pub modpack_options: HashMap<String, ModpackOptions>,
+    /// Closing the window hides to the tray (default) instead of quitting.
+    #[serde(default = "default_close_to_tray")]
+    pub close_to_tray: bool,
+}
+
+fn default_close_to_tray() -> bool {
+    true
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            data_dir: None,
+            modpack_options: HashMap::new(),
+            close_to_tray: default_close_to_tray(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -353,6 +370,14 @@ impl AppState {
 
     pub fn set_data_dir(&mut self, path: Option<String>, cx: &mut Context<Self>) {
         self.settings.data_dir = path.map(|p| p.trim().to_string()).filter(|s| !s.is_empty());
+        let _ = persistence::save_json("settings.json", &self.settings);
+        cx.notify();
+    }
+
+    /// Toggle whether closing the window hides to the tray or quits the app.
+    /// Read by the window's close handler (via the global handle) in main.rs.
+    pub fn set_close_to_tray(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        self.settings.close_to_tray = enabled;
         let _ = persistence::save_json("settings.json", &self.settings);
         cx.notify();
     }

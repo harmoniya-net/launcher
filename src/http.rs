@@ -1,7 +1,6 @@
 use std::sync::OnceLock;
 use std::time::Duration;
 
-use anyhow::{Result, anyhow};
 use reqwest::Client;
 use tokio::runtime::{Handle, Runtime};
 
@@ -48,6 +47,3 @@ where
 {
     handle().spawn(fut).await.expect("tokio task failed (panic or runtime gone)")
 }
-
-#[allow(dead_code)]
-fn _force_use(_e: anyhow::Error) -> Result<()> { Err(anyhow!("unused")) }

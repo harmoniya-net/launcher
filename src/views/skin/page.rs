@@ -1,8 +1,8 @@
-use gpui::{
-    AppContext, Context, Entity, FontWeight, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, Render, SharedString, Styled, Window, div, px, rgb,
-};
 use crate::widgets::icon::icon;
+use gpui::{
+    div, px, rgb, AppContext, Context, Entity, FontWeight, InteractiveElement, IntoElement,
+    MouseButton, ParentElement, Render, SharedString, Styled, Window,
+};
 
 use crate::services::launch;
 use crate::state::{AppState, Route, SkinTab};
@@ -26,9 +26,17 @@ impl SkinView {
         let skin_form = cx.new(|cx| SkinForm::new(state.clone(), cx));
         let placeholder = cx.new(|cx| Placeholder::new(state.clone(), cx));
         state.update(cx, |s, cx| {
-            if s.skin_profile.is_none() { s.fetch_skin_profile(cx); }
+            if s.skin_profile.is_none() {
+                s.fetch_skin_profile(cx);
+            }
         });
-        Self { state, user_bar, skin_form, placeholder, tab }
+        Self {
+            state,
+            user_bar,
+            skin_form,
+            placeholder,
+            tab,
+        }
     }
 }
 
@@ -41,6 +49,7 @@ impl Render for SkinView {
         let active_skin = self.tab == SkinTab::Skin;
         let active_launcher = self.tab == SkinTab::Launcher;
         let data_dir = self.state.read(cx).settings.data_dir.clone();
+        let close_to_tray = self.state.read(cx).settings.close_to_tray;
 
         div()
             .flex()
@@ -69,23 +78,51 @@ impl Render for SkinView {
                                     .flex_col()
                                     .gap(px(2.))
                                     .flex_1()
-                                    .child(nav_item(Some("icons/arrow-left.svg"), "Назад", false, move |_, _, cx| {
-                                        state_back.update(cx, |s, cx| s.set_route(Route::Account, cx));
-                                    }))
-                                    .child(nav_item(Some("icons/shirt.svg"), "Скін", active_skin, move |_, _, cx| {
-                                        state_skin.update(cx, |s, cx| {
-                                            s.set_route(Route::Skin { tab: SkinTab::Skin }, cx);
-                                        });
-                                    }))
-                                    .child(nav_item(Some("icons/rocket.svg"), "Лаунчер", active_launcher, move |_, _, cx| {
-                                        state_launcher.update(cx, |s, cx| {
-                                            s.set_route(Route::Skin { tab: SkinTab::Launcher }, cx);
-                                        });
-                                    })),
+                                    .child(nav_item(
+                                        Some("icons/arrow-left.svg"),
+                                        "Назад",
+                                        false,
+                                        move |_, _, cx| {
+                                            state_back.update(cx, |s, cx| {
+                                                s.set_route(Route::Account, cx)
+                                            });
+                                        },
+                                    ))
+                                    .child(nav_item(
+                                        Some("icons/shirt.svg"),
+                                        "Скін",
+                                        active_skin,
+                                        move |_, _, cx| {
+                                            state_skin.update(cx, |s, cx| {
+                                                s.set_route(Route::Skin { tab: SkinTab::Skin }, cx);
+                                            });
+                                        },
+                                    ))
+                                    .child(nav_item(
+                                        Some("icons/rocket.svg"),
+                                        "Лаунчер",
+                                        active_launcher,
+                                        move |_, _, cx| {
+                                            state_launcher.update(cx, |s, cx| {
+                                                s.set_route(
+                                                    Route::Skin {
+                                                        tab: SkinTab::Launcher,
+                                                    },
+                                                    cx,
+                                                );
+                                            });
+                                        },
+                                    )),
                             )
-                            .child(nav_item_styled(Some("icons/log-out.svg"), "Вийти", false, true, move |_, _, cx| {
-                                state_logout.update(cx, |s, cx| s.logout(cx));
-                            })),
+                            .child(nav_item_styled(
+                                Some("icons/log-out.svg"),
+                                "Вийти",
+                                false,
+                                true,
+                                move |_, _, cx| {
+                                    state_logout.update(cx, |s, cx| s.logout(cx));
+                                },
+                            )),
                     )
                     .child(self.user_bar.clone()),
             )
@@ -104,15 +141,21 @@ impl Render for SkinView {
                             .child(self.skin_form.clone())
                             .child(self.placeholder.clone())
                             .into_any_element(),
-                        SkinTab::Launcher => launcher_settings(&self.state, data_dir.clone()),
+                        SkinTab::Launcher => {
+                            launcher_settings(&self.state, data_dir.clone(), close_to_tray)
+                        }
                     }),
             )
     }
 }
 
-/// Launcher-wide settings (the Launcher tab): currently the install directory
-/// (`${root}`), where modpacks are downloaded and installed.
-fn launcher_settings(state: &Entity<AppState>, data_dir: Option<String>) -> gpui::AnyElement {
+/// Launcher-wide settings (the Launcher tab): the install directory (`${root}`)
+/// where modpacks are downloaded, plus the close-to-tray behavior toggle.
+fn launcher_settings(
+    state: &Entity<AppState>,
+    data_dir: Option<String>,
+    close_to_tray: bool,
+) -> gpui::AnyElement {
     let is_default = data_dir.is_none();
     let effective = data_dir.unwrap_or_else(launch::default_data_dir);
     let state_pick = state.clone();
@@ -167,7 +210,9 @@ fn launcher_settings(state: &Entity<AppState>, data_dir: Option<String>) -> gpui
                         .cursor_pointer()
                         .hover(|s| s.bg(rgb(0x4a4850)))
                         .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                            let result = native_dialog::DialogBuilder::file().open_single_dir().show();
+                            let result = native_dialog::DialogBuilder::file()
+                                .open_single_dir()
+                                .show();
                             if let Ok(Some(path)) = result {
                                 let path = path.to_string_lossy().to_string();
                                 state_pick.update(cx, |s, cx| s.set_data_dir(Some(path), cx));
@@ -206,6 +251,64 @@ fn launcher_settings(state: &Entity<AppState>, data_dir: Option<String>) -> gpui
                     .child("Скинути"),
             ),
         )
+        .child(close_to_tray_section(state, close_to_tray))
+        .into_any_element()
+}
+
+/// The "hide to tray vs quit" toggle for the Launcher settings tab.
+fn close_to_tray_section(state: &Entity<AppState>, on: bool) -> gpui::AnyElement {
+    let knob = div()
+        .w(px(16.))
+        .h(px(16.))
+        .rounded_full()
+        .bg(rgb(0xffffff))
+        .ml(if on { px(20.) } else { px(2.) });
+    let state_toggle = state.clone();
+    let switch = div()
+        .id("close-to-tray")
+        .w(px(38.))
+        .h(px(22.))
+        .rounded_full()
+        .flex()
+        .items_center()
+        .flex_shrink_0()
+        .bg(if on {
+            Theme::accent()
+        } else {
+            Theme::surface_raised()
+        })
+        .cursor_pointer()
+        .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+            state_toggle.update(cx, |s, cx| s.set_close_to_tray(!on, cx));
+        })
+        .child(knob);
+
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(8.))
+        .child(
+            div()
+                .text_size(px(11.))
+                .font_weight(FontWeight::BOLD)
+                .text_color(Theme::text_faint())
+                .child("ХОВАТИ У ТРЕЙ"),
+        )
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap(px(12.))
+                .child(
+                    div()
+                        .flex_1()
+                        .text_size(px(12.))
+                        .text_color(Theme::text_muted())
+                        .child("Замість закриття вікна лаунчер ховатиметься у трей"),
+                )
+                .child(switch),
+        )
         .into_any_element()
 }
 
@@ -232,7 +335,11 @@ fn nav_item_styled(
     } else {
         (Theme::surface(), Theme::text_faint())
     };
-    let hover_fg = if danger { Theme::status_offline() } else { Theme::text_muted() };
+    let hover_fg = if danger {
+        Theme::status_offline()
+    } else {
+        Theme::text_muted()
+    };
     let mut item = div()
         .id(SharedString::from(format!("nav-{label}")))
         .flex()

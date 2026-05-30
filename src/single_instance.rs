@@ -1,59 +1,48 @@
-//! Single-instance guard. The first launch binds a fixed loopback port and
-//! listens on it; a second launch fails to bind, connects to ping "focus", and
-//! exits — so the already-running window is brought to front instead of a
-//! duplicate opening.
+//! Single-instance guard backed by the `single-instance` crate. The first
+//! launch holds an OS primitive — a named mutex on Windows, an abstract UNIX
+//! domain socket on Linux, an `flock`'d file on macOS — and a second launch
+//! sees it isn't unique and bows out. The OS releases the primitive when the
+//! holding process dies, so there's no stale-lock problem (including after a
+//! `process::exit`, which is how we quit).
 //!
-//! Loopback TCP (rather than a Unix socket / Windows named pipe) is portable
-//! with no extra dependencies and has no stale-endpoint problem: the OS frees
-//! the port the moment the holder exits, so a failed bind reliably means a live
-//! instance owns it.
+//! Unlike the previous hand-rolled loopback-TCP scheme, this does *not* focus
+//! the already-running window on a second launch — the crate only does mutual
+//! exclusion, no IPC. A duplicate launch simply exits; use the tray icon to
+//! restore a window that's hidden to tray.
 
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
-use std::time::Duration;
+use single_instance::SingleInstance;
 
-/// Fixed loopback endpoint for the single-instance channel.
-const ADDR: &str = "127.0.0.1:47823";
-const PING: &[u8] = b"focus";
+/// Identifier for the lock. On macOS the crate treats the name as a filesystem
+/// path to `flock`, so give it an absolute path under the temp dir there; on
+/// Windows/Linux it's a mutex / abstract-socket name, where reverse-DNS is fine.
+fn lock_name() -> String {
+    #[cfg(target_os = "macos")]
+    let name = std::env::temp_dir()
+        .join("net.harmoniya.launcher.lock")
+        .to_string_lossy()
+        .into_owned();
+    #[cfg(not(target_os = "macos"))]
+    let name = "net.harmoniya.launcher".to_string();
+    name
+}
 
 pub enum Instance {
-    /// We're the only instance. Holds the listener for focus pings (`None` if we
-    /// couldn't bind for some unrelated reason — run anyway, just unguarded).
-    Primary(Option<TcpListener>),
-    /// Another instance is already running; it has been pinged to focus.
+    /// We're the only instance. The caller must keep the guard alive for the
+    /// process's lifetime to hold the lock; `None` means the guard couldn't be
+    /// created for some unrelated reason — run anyway, just unguarded.
+    Primary(Option<SingleInstance>),
+    /// Another instance is already running.
     AlreadyRunning,
 }
 
-/// Try to become the primary instance, or hand off to a running one.
+/// Try to become the primary instance.
 pub fn acquire() -> Instance {
-    match TcpListener::bind(ADDR) {
-        Ok(listener) => Instance::Primary(Some(listener)),
-        Err(_) => {
-            // Port busy — ask whoever is listening to focus, then bow out.
-            if let Ok(mut stream) = TcpStream::connect(ADDR) {
-                let _ = stream.write_all(PING);
-                let _ = stream.flush();
-                Instance::AlreadyRunning
-            } else {
-                // Couldn't bind and nobody answered (transient): don't block startup.
-                Instance::Primary(None)
-            }
+    match SingleInstance::new(&lock_name()) {
+        Ok(instance) if instance.is_single() => Instance::Primary(Some(instance)),
+        Ok(_) => Instance::AlreadyRunning,
+        Err(e) => {
+            tracing::warn!("single-instance guard unavailable: {e}");
+            Instance::Primary(None)
         }
     }
-}
-
-/// Run the accept loop on a background thread, invoking `on_focus` for each
-/// valid focus ping from a second instance.
-pub fn serve(listener: TcpListener, on_focus: impl Fn() + Send + 'static) {
-    std::thread::spawn(move || {
-        for stream in listener.incoming() {
-            let Ok(mut stream) = stream else { continue };
-            let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
-            let mut buf = [0u8; 16];
-            match stream.read(&mut buf) {
-                Ok(n) if buf[..n].starts_with(PING) => on_focus(),
-                _ => {}
-            }
-        }
-    });
 }
