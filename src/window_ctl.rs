@@ -80,7 +80,10 @@ fn set_visible_win32(window: &Window, visible: bool) {
         SW_HIDE, SW_SHOW, SetForegroundWindow, ShowWindow,
     };
 
-    let Ok(handle) = window.window_handle() else { return };
+    // Call the `HasWindowHandle` trait method explicitly: GPUI's inherent
+    // `Window::window_handle()` shadows it and returns an opaque
+    // `AnyWindowHandle`, not the raw handle we need for the `HWND`.
+    let Ok(handle) = HasWindowHandle::window_handle(window) else { return };
     if let RawWindowHandle::Win32(w) = handle.as_raw() {
         let hwnd = w.hwnd.get() as *mut core::ffi::c_void;
         unsafe {
