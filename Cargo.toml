@@ -81,6 +81,7 @@ opys-runtime = { workspace = true }
 
 # Workspace library crates.
 harmoniya-api = { path = "crates/harmoniya-api" }
+harmoniya-launch = { path = "crates/harmoniya-launch" }
 mc-skin = { path = "crates/mc-skin" }
 
 # App-only dependencies.

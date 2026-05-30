@@ -2,10 +2,8 @@ mod app;
 mod assets;
 mod banner;
 mod desktop_integration;
-mod game;
 mod gpui_http;
 mod logo;
-mod services;
 mod single_instance;
 mod state;
 mod theme;
@@ -113,7 +111,7 @@ fn main() {
         // Backstop: if the app quits some other way than tray Quit, at least
         // SIGTERM the game (the ~100ms quit budget rules out a full graceful wait).
         cx.on_app_quit(|_cx| {
-            crate::game::sigterm_all();
+            harmoniya_launch::game::sigterm_all();
             async {}
         })
         .detach();
@@ -149,7 +147,7 @@ fn start_tray(window: gpui::AnyWindowHandle, cx: &mut App) {
 /// doesn't reliably wake on `cx.quit()` from an idle, D-Bus-driven task. The
 /// `-> !` return lets callers use it as a terminal expression.
 async fn graceful_quit() -> ! {
-    harmoniya_api::http::on_tokio(crate::game::stop_all()).await;
+    harmoniya_api::http::on_tokio(harmoniya_launch::game::stop_all()).await;
     std::process::exit(0);
 }
 

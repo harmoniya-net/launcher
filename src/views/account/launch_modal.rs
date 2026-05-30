@@ -5,7 +5,7 @@ use gpui::{
     Render, Styled, Window, div, px, relative,
 };
 
-use crate::services::launch::{LaunchError, LaunchProgress, LaunchState};
+use harmoniya_launch::pipeline::{LaunchError, LaunchProgress, LaunchState};
 use crate::state::AppState;
 use crate::theme::Theme;
 use crate::widgets::modal::Modal;

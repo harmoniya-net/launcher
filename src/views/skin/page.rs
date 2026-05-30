@@ -4,7 +4,7 @@ use gpui::{
     MouseButton, ParentElement, Render, SharedString, Styled, Window,
 };
 
-use crate::services::launch;
+use harmoniya_launch::pipeline as launch;
 use crate::state::{AppState, Route, SkinTab};
 use crate::theme::Theme;
 

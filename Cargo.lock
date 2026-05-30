@@ -2828,6 +2828,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "harmoniya-launch"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "directories",
+ "futures",
+ "harmoniya-api",
+ "indexmap",
+ "libc",
+ "opys-runtime",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "harmoniya-launcher"
 version = "0.3.1"
 dependencies = [
@@ -2840,6 +2857,7 @@ dependencies = [
  "gpui",
  "gpui_http_client",
  "harmoniya-api",
+ "harmoniya-launch",
  "http",
  "image",
  "indexmap",

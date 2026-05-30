@@ -11,7 +11,7 @@ use harmoniya_api::services::{
     options::{self, ModpackOptions},
     yggdrasil::{SkinModel, SkinProfile, fetch_profile},
 };
-use crate::services::launch::{self, LaunchMsg, LaunchState};
+use harmoniya_launch::pipeline::{self as launch, LaunchMsg, LaunchState};
 use futures::StreamExt;
 
 #[derive(Clone, Debug)]
@@ -172,12 +172,12 @@ impl AppState {
         // Mirror the game registry's running set into state so the UI can show a
         // "stop" button. `game` pings the channel whenever a game starts/exits.
         let (tx, mut rx) = futures::channel::mpsc::unbounded::<()>();
-        crate::game::set_listener(tx);
+        harmoniya_launch::game::set_listener(tx);
         let watcher = cx.spawn({
             let entity = entity.clone();
             async move |cx: &mut gpui::AsyncApp| {
                 while rx.next().await.is_some() {
-                    let ids: HashSet<String> = crate::game::running_ids().into_iter().collect();
+                    let ids: HashSet<String> = harmoniya_launch::game::running_ids().into_iter().collect();
                     let _ = entity.update(cx, |state, cx| {
                         if state.running != ids {
                             state.running = ids;
@@ -200,7 +200,7 @@ impl AppState {
     /// set updates via the game listener once it's torn down.
     pub fn stop_game(&mut self, modpack_id: String, cx: &mut Context<Self>) {
         cx.background_spawn(async move {
-            harmoniya_api::http::on_tokio(crate::game::stop(modpack_id)).await;
+            harmoniya_api::http::on_tokio(harmoniya_launch::game::stop(modpack_id)).await;
         })
         .detach();
     }
