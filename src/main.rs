@@ -1,15 +1,11 @@
 mod app;
 mod assets;
 mod banner;
-mod desktop_integration;
 mod gpui_http;
 mod logo;
-mod single_instance;
+mod shell;
 mod state;
 mod theme;
-mod tray;
-mod update;
-mod window_ctl;
 mod views;
 mod widgets;
 
@@ -21,8 +17,9 @@ use gpui::{App, AppContext, Application, Bounds, WindowBounds, WindowOptions, px
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 use crate::app::Root;
+use crate::shell::tray::TrayCmd;
+use crate::shell::{desktop_integration, single_instance, tray, update};
 use crate::state::{AppState, AppStateHandle, MainWindow};
-use crate::tray::TrayCmd;
 
 fn main() {
     init_logging();
@@ -86,7 +83,7 @@ fn main() {
                             .map(|h| h.0.read(cx).settings.close_to_tray)
                             .unwrap_or(true);
                         if close_to_tray {
-                            crate::window_ctl::hide(window, cx);
+                            crate::shell::window_ctl::hide(window, cx);
                         } else {
                             begin_quit(cx);
                         }
@@ -127,12 +124,12 @@ fn start_tray(window: gpui::AnyWindowHandle, cx: &mut App) {
             match cmd {
                 TrayCmd::Show => {
                     let _ = cx.update_window(window, |_, window, app| {
-                        crate::window_ctl::show(window, app)
+                        crate::shell::window_ctl::show(window, app)
                     });
                 }
                 TrayCmd::Toggle => {
                     let _ = cx.update_window(window, |_, window, app| {
-                        crate::window_ctl::toggle(window, app)
+                        crate::shell::window_ctl::toggle(window, app)
                     });
                 }
                 TrayCmd::Quit => graceful_quit().await,

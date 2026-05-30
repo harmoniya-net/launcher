@@ -7,7 +7,7 @@
 //!   the native run loop, so its menu/click events fire.
 //! - Other platforms: no-op.
 //!
-//! The menu's toggle label tracks [`crate::window_ctl::is_visible`]; call
+//! The menu's toggle label tracks [`crate::shell::window_ctl::is_visible`]; call
 //! [`refresh`] after the window's visibility changes to re-render it.
 
 use futures::channel::mpsc::UnboundedSender;
@@ -97,7 +97,7 @@ mod linux {
         fn menu(&self) -> Vec<MenuItem<Self>> {
             vec![
                 StandardItem {
-                    label: toggle_label(crate::window_ctl::is_visible()).into(),
+                    label: toggle_label(crate::shell::window_ctl::is_visible()).into(),
                     activate: Box::new(|t: &mut Self| t.send(TrayCmd::Toggle)),
                     ..Default::default()
                 }
@@ -159,7 +159,7 @@ mod desktop {
 
     pub fn spawn(tx: UnboundedSender<TrayCmd>) {
         let menu = Menu::new();
-        let toggle = MenuItem::new(toggle_label(crate::window_ctl::is_visible()), true, None);
+        let toggle = MenuItem::new(toggle_label(crate::shell::window_ctl::is_visible()), true, None);
         let quit = MenuItem::new("Вийти", true, None);
         if let Err(e) = menu
             .append(&toggle)
@@ -221,7 +221,7 @@ mod desktop {
 
     pub fn refresh() {
         // Runs on the main thread (tray command loop / deferred app closures).
-        let label = toggle_label(crate::window_ctl::is_visible());
+        let label = toggle_label(crate::shell::window_ctl::is_visible());
         TOGGLE.with(|c| {
             if let Some(item) = c.borrow().as_ref() {
                 item.set_text(label);

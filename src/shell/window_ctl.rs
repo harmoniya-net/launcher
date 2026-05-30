@@ -29,7 +29,7 @@ pub fn is_visible() -> bool {
 fn set_visible_state(visible: bool) {
     WINDOW_VISIBLE.store(visible, Ordering::Relaxed);
     // Keep the tray's toggle label ("Сховати"/"Показати") in sync.
-    crate::tray::refresh();
+    crate::shell::tray::refresh();
 }
 
 /// Hide the window out of sight; restored via the tray.
