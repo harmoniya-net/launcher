@@ -4,7 +4,7 @@
 use std::str::FromStr;
 
 use anyhow::anyhow;
-use futures::{AsyncReadExt, FutureExt, TryStreamExt};
+use futures::{AsyncReadExt, FutureExt};
 use http_client::{AsyncBody, HttpClient};
 
 pub struct GpuiHttpClient {

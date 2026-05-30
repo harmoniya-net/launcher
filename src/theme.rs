@@ -44,9 +44,6 @@ impl Theme {
     pub fn overlay() -> Hsla {
         hsla(0.0, 0.0, 0.0, 0.65)
     }
-    pub fn card_shade_top() -> Hsla {
-        hsla(258.0 / 360.0, 0.04, 0.05, 0.6)
-    }
 
     pub fn radius_panel() -> Pixels {
         px(6.)

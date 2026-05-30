@@ -103,11 +103,6 @@ impl AppState {
         self.settings.modpack_options.get(modpack_id)?.vars.get(name).cloned()
     }
 
-    /// Saved on/off for a feature, if the user toggled it (else use the default).
-    pub fn feature_enabled(&self, modpack_id: &str, name: &str) -> Option<bool> {
-        self.settings.modpack_options.get(modpack_id)?.features.get(name).copied()
-    }
-
     /// Set (or clear, with `None`) a leaf option's value.
     pub fn set_option_value(&mut self, modpack_id: String, name: String, value: Option<String>, cx: &mut Context<Self>) {
         let entry = self.settings.modpack_options.entry(modpack_id).or_default();

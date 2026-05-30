@@ -104,19 +104,14 @@ pub struct LaunchError {
 }
 
 /// UI-facing launch state, 1:1 with the web `LaunchState` union.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum LaunchState {
+    #[default]
     Idle,
     Starting,
     Progress(LaunchProgress),
     Error(LaunchError),
     Done { pid: u32 },
-}
-
-impl Default for LaunchState {
-    fn default() -> Self {
-        LaunchState::Idle
-    }
 }
 
 /// Messages streamed from the worker (running on the tokio runtime) back to the
@@ -333,6 +328,7 @@ pub async fn run(
     let _ = tx.unbounded_send(msg);
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_inner(
     mut tokens: Tokens,
     modpack_id: String,

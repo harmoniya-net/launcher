@@ -1,6 +1,6 @@
 use gpui::{
     Context, Entity, FontWeight, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    Render, StatefulInteractiveElement, Styled, Window, div, img, px, rgb,
+    Render, Styled, Window, div, img, px, rgb,
 };
 use crate::widgets::icon::icon;
 

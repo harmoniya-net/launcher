@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use gpui::{
     Animation, AnimationExt, AnyElement, App, FontWeight, InteractiveElement, IntoElement,
-    MouseButton, ParentElement, StatefulInteractiveElement, Styled, div, ease_out_quint, px, svg,
+    MouseButton, ParentElement, Styled, div, ease_out_quint, px, svg,
 };
 
 use crate::theme::Theme;

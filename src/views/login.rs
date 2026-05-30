@@ -1,6 +1,6 @@
 use gpui::{
     Context, Entity, FontWeight, Hsla, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    Render, StatefulInteractiveElement, Styled, Window, div, px, rgb,
+    Render, Styled, Window, div, px, rgb,
 };
 
 use harmoniya_api::auth::Provider;

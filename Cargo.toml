@@ -58,26 +58,15 @@ gpui = "0.2"
 
 # Shared with the workspace crates (specs live in [workspace.dependencies]).
 reqwest = { workspace = true }
-tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
-thiserror = { workspace = true }
 futures = { workspace = true }
 tracing = { workspace = true }
 directories = { workspace = true }
-base64 = { workspace = true }
 url = { workspace = true }
-indexmap = { workspace = true }
-serde_urlencoded = { workspace = true }
-percent-encoding = { workspace = true }
-keyring = { workspace = true }
-tiny_http = { workspace = true }
 open = { workspace = true }
-sha2 = { workspace = true }
-rand = { workspace = true }
 image = { workspace = true }
-opys-runtime = { workspace = true }
 
 # Workspace library crates.
 harmoniya-api = { path = "crates/harmoniya-api" }
@@ -87,6 +76,7 @@ mc-skin = { path = "crates/mc-skin" }
 # App-only dependencies.
 native-dialog = "0.9"
 single-instance = "0.3"
+rust-embed = "8"
 pulldown-cmark = { version = "0.12", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
@@ -96,8 +86,6 @@ self_update = { version = "0.41", default-features = false, features = [
   "archive-tar",
 ] }
 http_client = { package = "gpui_http_client", version = "0.2" }
-http = "1"
-bytes = "1"
 time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
 emojis = "0.8.2"
 unicode-segmentation = "1.13.2"
@@ -107,9 +95,6 @@ resvg = "0.47.0"
 lto = false         # Disable Link Time Optimization
 codegen-units = 256 # Compile code in parallel chunks
 debug = false       # Omit debug symbols
-
-[target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 
 # Tray: ksni (StatusNotifierItem over D-Bus) on Linux — no GTK loop, unlike
 # tray-icon's Linux backend, so it doesn't fight GPUI's own Linux event loop.

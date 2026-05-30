@@ -29,15 +29,12 @@ mod session;
 mod skin;
 mod ui;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum Route {
+    #[default]
     Login,
     Account,
     Skin { tab: SkinTab },
-}
-
-impl Default for Route {
-    fn default() -> Self { Route::Login }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

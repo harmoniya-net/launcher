@@ -3,7 +3,7 @@
 //! GPUI's image layer) instead of relying on whatever color-emoji font happens
 //! to be installed.
 
-use gpui::{Div, IntoElement, ParentElement, Styled, div, img, px};
+use gpui::{Div, ParentElement, Styled, div, img, px};
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Maintained Twemoji fork; 72×72 PNGs keyed by dash-joined codepoints.

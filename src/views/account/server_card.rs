@@ -5,7 +5,7 @@ use gpui::{
     Animation, AnimationExt, AnyElement, FontWeight, Image, ImageSource, InteractiveElement,
     IntoElement, MouseButton, ObjectFit, ParentElement, SharedString, StatefulInteractiveElement,
     StyledImage, Styled, Window, div, ease_in_out, hsla, img, linear_color_stop, linear_gradient,
-    prelude::FluentBuilder, px, relative, rgb,
+    px, rgb,
 };
 
 use harmoniya_api::services::modpacks::Modpack;
@@ -15,6 +15,7 @@ use crate::theme::Theme;
 /// computes these based on the card's role in its group (active/neighbor/edge)
 /// and tracks the last rendered height so the animation always starts from the
 /// real current position rather than a hardcoded inverse.
+#[allow(clippy::too_many_arguments)]
 pub fn server_card(
     m: Modpack,
     active: bool,

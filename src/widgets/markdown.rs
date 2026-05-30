@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use gpui::{
     AnyElement, FontWeight, Hsla, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    SharedString, StatefulInteractiveElement, Styled, div, img, px,
+    SharedString, Styled, div, img, px,
 };
 use pulldown_cmark::{Event, HeadingLevel, Parser, Tag, TagEnd};
 
