@@ -38,16 +38,30 @@ impl Render for Description {
                 .into_any_element()
         };
 
-        // Header: project logo + title for the selected modpack.
-        let mut header = div()
+        let mut panel = div()
             .flex()
-            .items_center()
-            .gap(px(10.))
-            .px(px(20.))
-            .py(px(12.))
-            .border_b_1()
-            .border_color(Theme::surface_raised());
+            .flex_1()
+            .h_full()
+            .min_w(px(0.))
+            .min_h(px(0.))
+            .flex_col()
+            .bg(Theme::surface())
+            .rounded(Theme::radius_panel())
+            .overflow_hidden();
+
+        // Header (project logo + title) and its divider only exist for a
+        // selected modpack; with nothing selected there's nothing to label, so
+        // skip it — otherwise an empty header strip + border shows above the
+        // "Оберіть сервер" placeholder.
         if let Some(m) = &modpack {
+            let mut header = div()
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .px(px(20.))
+                .py(px(12.))
+                .border_b_1()
+                .border_color(Theme::surface_raised());
             if let Some(url) = m.project.logo.url.clone() {
                 header = header.child(
                     img(url)
@@ -65,28 +79,18 @@ impl Render for Description {
                     .text_color(Theme::text())
                     .child(m.title.clone()),
             );
+            panel = panel.child(header);
         }
 
-        div()
-            .flex()
-            .flex_1()
-            .h_full()
-            .min_w(px(0.))
-            .min_h(px(0.))
-            .flex_col()
-            .bg(Theme::surface())
-            .rounded(Theme::radius_panel())
-            .overflow_hidden()
-            .child(header)
-            .child(
-                div()
-                    .id("description-scroll")
-                    .flex_1()
-                    .min_h(px(0.))
-                    .overflow_y_scroll()
-                    .px(px(24.))
-                    .py(px(20.))
-                    .child(body),
-            )
+        panel.child(
+            div()
+                .id("description-scroll")
+                .flex_1()
+                .min_h(px(0.))
+                .overflow_y_scroll()
+                .px(px(24.))
+                .py(px(20.))
+                .child(body),
+        )
     }
 }
