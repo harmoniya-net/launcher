@@ -2,9 +2,9 @@ use gpui::{
     AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Window, div, px,
 };
 
-use crate::skin_viewer::SkinViewer;
 use crate::state::AppState;
 use crate::theme::Theme;
+use crate::views::skin::viewer::SkinViewer;
 
 pub struct Placeholder {
     _state: Entity<AppState>,

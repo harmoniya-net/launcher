@@ -2821,6 +2821,7 @@ dependencies = [
  "keyring",
  "ksni",
  "libc",
+ "mc-skin",
  "native-dialog",
  "open",
  "opys-runtime",
@@ -3715,6 +3716,14 @@ checksum = "8ea1f30cedd69f0a2954655f7188c6a834246d2bcf1e315e2ac40c4b24dc9519"
 dependencies = [
  "cfg-if",
  "rayon",
+]
+
+[[package]]
+name = "mc-skin"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "image",
 ]
 
 [[package]]

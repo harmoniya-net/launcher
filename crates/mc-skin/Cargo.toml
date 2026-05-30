@@ -1,0 +1,10 @@
+[package]
+name = "mc-skin"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Minecraft skin rendering: player head + software 3D rasterizer."
+
+[dependencies]
+image = { workspace = true }
+anyhow = { workspace = true }

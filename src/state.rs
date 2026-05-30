@@ -567,7 +567,7 @@ impl AppState {
                 Ok(b) => b,
                 Err(_) => return,
             };
-            let head_png = match crate::skin_head::render(&bytes) {
+            let head_png = match mc_skin::head::render(&bytes) {
                 Ok(b) => b,
                 Err(_) => return,
             };

@@ -8,9 +8,20 @@ publish = false
 name = "harmoniya-launcher"
 path = "src/main.rs"
 
-[dependencies]
-gpui = "0.2"
+[workspace]
+members = ["crates/*"]
+resolver = "2"
 
+# Shared dependency specs for every workspace member (the app + crates/*). Pin
+# version + features once here; members opt in with `{ workspace = true }`.
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+futures = "0.3"
+tracing = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "time", "process", "fs", "sync"] }
 reqwest = { version = "0.12", default-features = false, features = [
   "rustls-tls",
   "json",
@@ -18,65 +29,77 @@ reqwest = { version = "0.12", default-features = false, features = [
   "multipart",
   "stream",
 ] }
-tokio = { version = "1", features = ["rt-multi-thread", "time"] }
-
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-
-tiny_http = "0.12"
-open = "5"
-native-dialog = "0.9"
-single-instance = "0.3"
-
+image = { version = "0.25", default-features = false, features = [
+  "png",
+  "jpeg",
+  "webp",
+] }
 directories = "5"
+base64 = "0.22"
+url = "2"
+indexmap = "2.14.0"
+serde_urlencoded = "0.7"
+percent-encoding = "2"
 keyring = { version = "3", default-features = false, features = [
   "sync-secret-service",
   "vendored",
   "apple-native",
   "windows-native",
 ] }
-
-pulldown-cmark = { version = "0.12", default-features = false }
-image = { version = "0.25", default-features = false, features = [
-  "png",
-  "jpeg",
-  "webp",
-] }
-
+tiny_http = "0.12"
+open = "5"
 sha2 = "0.10"
-base64 = "0.22"
 rand = "0.8"
-url = "2"
-serde_urlencoded = "0.7"
-percent-encoding = "2"
+opys-runtime = "0.1.7"
+libc = "0.2"
 
-tracing = "0.1"
+[dependencies]
+gpui = "0.2"
+
+# Shared with the workspace crates (specs live in [workspace.dependencies]).
+reqwest = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }
+tracing = { workspace = true }
+directories = { workspace = true }
+base64 = { workspace = true }
+url = { workspace = true }
+indexmap = { workspace = true }
+serde_urlencoded = { workspace = true }
+percent-encoding = { workspace = true }
+keyring = { workspace = true }
+tiny_http = { workspace = true }
+open = { workspace = true }
+sha2 = { workspace = true }
+rand = { workspace = true }
+image = { workspace = true }
+opys-runtime = { workspace = true }
+
+# Workspace library crates.
+mc-skin = { path = "crates/mc-skin" }
+
+# App-only dependencies.
+native-dialog = "0.9"
+single-instance = "0.3"
+pulldown-cmark = { version = "0.12", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
-
 self_update = { version = "0.41", default-features = false, features = [
   "rustls",
   "compression-flate2",
   "archive-tar",
 ] }
-
-anyhow = "1"
-thiserror = "1"
-futures = "0.3"
 http_client = { package = "gpui_http_client", version = "0.2" }
 http = "1"
 bytes = "1"
 time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
-opys-runtime = "0.1.7"
-indexmap = "2.14.0"
 emojis = "0.8.2"
 unicode-segmentation = "1.13.2"
 resvg = "0.47.0"
-
-# [profile.release]
-# lto = "thin"
-# codegen-units = 1
-# strip = "symbols"
 
 [profile.release]
 lto = false         # Disable Link Time Optimization
@@ -95,7 +118,7 @@ ksni = { version = "0.3.4", default-features = false, features = ["blocking", "a
 
 # Graceful SIGTERM to the game process on quit (tokio's Child only does SIGKILL).
 [target.'cfg(unix)'.dependencies]
-libc = "0.2"
+libc = { workspace = true }
 
 # macOS/Windows use tray-icon, created on the main thread where GPUI pumps the
 # native run loop, so its menu/click events are delivered.

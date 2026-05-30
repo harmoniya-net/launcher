@@ -10,8 +10,6 @@ mod logo;
 mod persistence;
 mod services;
 mod single_instance;
-mod skin_head;
-mod skin_viewer;
 mod state;
 mod theme;
 mod tray;
