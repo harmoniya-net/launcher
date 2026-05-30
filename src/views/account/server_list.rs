@@ -36,6 +36,9 @@ const CARD_COL_W: f32 = 432.0;
 const SHADOW_REST: f32 = 0.85;
 const SHADOW_HOVER: f32 = 0.45;
 const SHADOW_ACTIVE: f32 = 0.20;
+/// Banner image opacity: dimmed at rest, revealed on hover/active.
+const BANNER_REST: f32 = 0.35;
+const BANNER_LIT: f32 = 0.85;
 
 /// Per-card animation state. `source` is where the current tween started,
 /// `target` is where it's heading, and `started_at` lets us compute the actual
@@ -44,6 +47,11 @@ const SHADOW_ACTIVE: f32 = 0.20;
 #[derive(Clone, Copy)]
 struct CardHeight { source: f32, target: f32, started_at: Instant }
 
+/// Last-rendered banner + shadow alpha for a card, so the next render eases
+/// from it (and a resting card passes `from == to`, animating nothing).
+#[derive(Clone, Copy)]
+struct CardVisual { banner: f32, shadow: f32 }
+
 fn ease_in_out(t: f32) -> f32 {
     if t < 0.5 { 2.0 * t * t } else { let x = -2.0 * t + 2.0; 1.0 - x * x / 2.0 }
 }
@@ -51,16 +59,16 @@ fn ease_in_out(t: f32) -> f32 {
 pub struct ServerList {
     state: Entity<AppState>,
     heights: HashMap<String, CardHeight>,
-    /// Last bottom-shadow alpha rendered per card, so the next render can ease
+    /// Last banner + shadow alpha rendered per card, so the next render can ease
     /// from it — and resting cards (unchanged) pass `from == to` and don't animate.
-    shadow_alpha: HashMap<String, f32>,
+    visuals: HashMap<String, CardVisual>,
     hovered_id: Option<String>,
 }
 
 impl ServerList {
     pub fn new(state: Entity<AppState>, cx: &mut Context<Self>) -> Self {
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
-        Self { state, heights: HashMap::new(), shadow_alpha: HashMap::new(), hovered_id: None }
+        Self { state, heights: HashMap::new(), visuals: HashMap::new(), hovered_id: None }
     }
 }
 
@@ -160,17 +168,21 @@ impl ServerList {
                 self.heights.insert(m.id.clone(), curr_state);
                 let prev = curr_state.source;
 
-                // Shadow target for this state; ease from the last rendered alpha
-                // (so only the card that changed animates).
-                let shadow_to = if active {
-                    SHADOW_ACTIVE
+                // Banner + shadow targets for this state; ease from the last
+                // rendered alphas so only the card that changed animates.
+                let (banner_to, shadow_to) = if active {
+                    (BANNER_LIT, SHADOW_ACTIVE)
                 } else if is_hovered {
-                    SHADOW_HOVER
+                    (BANNER_LIT, SHADOW_HOVER)
                 } else {
-                    SHADOW_REST
+                    (BANNER_REST, SHADOW_REST)
                 };
-                let shadow_from = self.shadow_alpha.get(&m.id).copied().unwrap_or(shadow_to);
-                self.shadow_alpha.insert(m.id.clone(), shadow_to);
+                let prev_vis = self
+                    .visuals
+                    .get(&m.id)
+                    .copied()
+                    .unwrap_or(CardVisual { banner: banner_to, shadow: shadow_to });
+                self.visuals.insert(m.id.clone(), CardVisual { banner: banner_to, shadow: shadow_to });
 
                 let id = m.id.clone();
                 let banner = m
@@ -199,7 +211,9 @@ impl ServerList {
                     is_hovered,
                     prev,
                     target,
-                    shadow_from,
+                    prev_vis.banner,
+                    banner_to,
+                    prev_vis.shadow,
                     shadow_to,
                     banner,
                     move |_, _, cx| {

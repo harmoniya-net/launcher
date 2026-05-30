@@ -22,9 +22,11 @@ pub fn server_card(
     hovered: bool,
     prev_h: f32,
     target_h: f32,
-    // Bottom-shadow alpha to ease from/to this frame. `from == to` means no
-    // change (a resting card), so its animation is a no-op — caller computes
-    // these from the card's previous alpha so only the changing card animates.
+    // Banner + bottom-shadow alphas to ease from/to this frame. `from == to`
+    // means no change (a resting card), so the animation is a no-op — the
+    // caller passes the card's previous alpha so only the changing card eases.
+    banner_from: f32,
+    banner_to: f32,
     shadow_from: f32,
     shadow_to: f32,
     banner: Option<Arc<Image>>,
@@ -39,12 +41,9 @@ pub fn server_card(
         .and_then(|b| b.url.as_deref())
         .map(|u| crate::banner::at_size(u, 816, 400));
 
-    let group_name = SharedString::from(format!("card-{id}"));
-
     let text_color = if active || hovered { Theme::text() } else { Theme::text_faint() };
     let mut card = div()
         .id(("server-card", hash_id(&id)))
-        .group(group_name.clone())
         .relative()
         .flex()
         .flex_col()
@@ -68,16 +67,19 @@ pub fn server_card(
             Some(arc) => arc.into(),
             None => url.into(),
         };
-        let mut banner_img = img(source)
+        // Banner opacity eases between dimmed (rest) and lit (hover/active) so
+        // the entry transitions smoothly rather than popping.
+        let banner_img = img(source)
             .object_fit(ObjectFit::Cover)
             .absolute()
             .inset_0()
             .size_full()
             .rounded(Theme::radius_card())
-            .opacity(if active { 0.85 } else { 0.35 });
-        if !active {
-            banner_img = banner_img.group_hover(group_name.clone(), |s| s.opacity(0.85));
-        }
+            .with_animation(
+                SharedString::from(format!("card-banner-{id}-{banner_to}")),
+                Animation::new(Duration::from_millis(150)).with_easing(ease_in_out),
+                move |this, t| this.opacity(banner_from + (banner_to - banner_from) * t),
+            );
         card = card.child(banner_img);
         // Inner shadow from top and bottom: two gradient bands that fade dark
         // into transparent toward the card's vertical center. Each band covers
