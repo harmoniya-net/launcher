@@ -3,7 +3,7 @@ use gpui::{
     Render, StatefulInteractiveElement, Styled, Window, div, px, rgb,
 };
 
-use crate::auth::Provider;
+use harmoniya_api::auth::Provider;
 use crate::state::AppState;
 use crate::theme::Theme;
 use crate::widgets::icon::icon;

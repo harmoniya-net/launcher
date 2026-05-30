@@ -7,7 +7,7 @@ use gpui::{
     div, px, relative, rgb,
 };
 
-use crate::services::options::{self, Choice, Field, ModpackOptions};
+use harmoniya_api::services::options::{self, Choice, Field, ModpackOptions};
 use crate::state::AppState;
 use crate::theme::Theme;
 use crate::widgets::modal::Modal;

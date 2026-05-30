@@ -4,7 +4,7 @@ use gpui::{
 };
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
-use crate::services::modpacks::Announcement;
+use harmoniya_api::services::modpacks::Announcement;
 use crate::state::AppState;
 use crate::theme::Theme;
 use crate::widgets::icon::icon;

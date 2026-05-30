@@ -8,7 +8,7 @@ use gpui::{
     prelude::FluentBuilder, px, relative, rgb,
 };
 
-use crate::services::modpacks::Modpack;
+use harmoniya_api::services::modpacks::Modpack;
 use crate::theme::Theme;
 
 /// `prev_h` / `target_h`: the height to tween from/to. Caller (ServerList)

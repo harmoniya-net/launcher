@@ -1,13 +1,10 @@
 mod app;
 mod assets;
-mod auth;
 mod banner;
 mod desktop_integration;
 mod game;
 mod gpui_http;
-mod http;
 mod logo;
-mod persistence;
 mod services;
 mod single_instance;
 mod state;
@@ -152,7 +149,7 @@ fn start_tray(window: gpui::AnyWindowHandle, cx: &mut App) {
 /// doesn't reliably wake on `cx.quit()` from an idle, D-Bus-driven task. The
 /// `-> !` return lets callers use it as a terminal expression.
 async fn graceful_quit() -> ! {
-    crate::http::on_tokio(crate::game::stop_all()).await;
+    harmoniya_api::http::on_tokio(crate::game::stop_all()).await;
     std::process::exit(0);
 }
 
@@ -168,7 +165,7 @@ fn init_logging() {
     let console = fmt::layer().with_target(false);
     let registry = tracing_subscriber::registry().with(filter).with(console);
 
-    if let Ok(dir) = persistence::logs_dir() {
+    if let Ok(dir) = harmoniya_api::config::logs_dir() {
         let appender = tracing_appender::rolling::daily(dir, "harmoniya.log");
         let file_layer = fmt::layer().with_target(true).with_ansi(false).with_writer(appender);
         let _ = registry.with(file_layer).try_init();

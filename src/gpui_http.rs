@@ -13,7 +13,7 @@ pub struct GpuiHttpClient {
 
 impl GpuiHttpClient {
     pub fn new() -> Self {
-        Self { inner: crate::http::client().clone() }
+        Self { inner: harmoniya_api::http::client().clone() }
     }
 }
 
@@ -41,7 +41,7 @@ impl HttpClient for GpuiHttpClient {
                 .collect();
 
             // The whole reqwest call must run inside the tokio reactor.
-            let (status, resp_headers, body_bytes) = crate::http::on_tokio(async move {
+            let (status, resp_headers, body_bytes) = harmoniya_api::http::on_tokio(async move {
                 let mut builder = client.request(method, &url);
                 for (k, v) in headers { builder = builder.header(k, v); }
                 if !body_bytes.is_empty() { builder = builder.body(body_bytes); }

@@ -16,7 +16,7 @@ use gpui::{
 };
 use image::{Frame, RgbaImage};
 
-use crate::services::yggdrasil::SkinModel;
+use harmoniya_api::services::yggdrasil::SkinModel;
 use crate::state::AppState;
 use crate::theme::Theme;
 
@@ -181,8 +181,8 @@ impl SkinViewer {
             Source::Url(url) => {
                 let key = Source::Url(url.clone());
                 cx.spawn(async move |this, cx| {
-                    let bytes = match crate::http::on_tokio(async move {
-                        crate::http::client()
+                    let bytes = match harmoniya_api::http::on_tokio(async move {
+                        harmoniya_api::http::client()
                             .get(&url)
                             .send()
                             .await?

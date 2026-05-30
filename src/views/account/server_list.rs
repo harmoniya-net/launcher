@@ -7,7 +7,7 @@ use gpui::{
     prelude::FluentBuilder,
 };
 
-use crate::services::modpacks::Modpack;
+use harmoniya_api::services::modpacks::Modpack;
 use crate::state::AppState;
 use crate::theme::Theme;
 use crate::widgets::icon::icon;

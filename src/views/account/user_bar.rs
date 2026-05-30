@@ -4,7 +4,7 @@ use gpui::{
 };
 use crate::widgets::icon::icon;
 
-use crate::services::group::lookup;
+use harmoniya_api::services::group::lookup;
 use crate::state::{AppState, Route, SkinTab};
 use crate::theme::Theme;
 

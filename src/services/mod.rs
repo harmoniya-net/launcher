@@ -1,6 +1,3 @@
-pub mod account;
-pub mod group;
+//! Game launch pipeline. The backend API services moved to the `harmoniya-api`
+//! crate; only the install/spawn flow lives here for now.
 pub mod launch;
-pub mod modpacks;
-pub mod options;
-pub mod yggdrasil;

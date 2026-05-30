@@ -46,7 +46,7 @@ pub fn register(modpack_id: String, child: Child) {
     }
     notify();
     REAPER.call_once(|| {
-        crate::http::handle().spawn(async {
+        harmoniya_api::http::handle().spawn(async {
             let mut tick = tokio::time::interval(Duration::from_secs(2));
             loop {
                 tick.tick().await;

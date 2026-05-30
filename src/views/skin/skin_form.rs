@@ -5,8 +5,8 @@ use gpui::{
     Render, SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::auth;
-use crate::services::yggdrasil::{self, SkinModel};
+use harmoniya_api::auth;
+use harmoniya_api::services::yggdrasil::{self, SkinModel};
 use crate::state::AppState;
 use crate::theme::Theme;
 
@@ -189,7 +189,7 @@ impl SkinForm {
         cx.notify();
 
         cx.spawn(async move |this, cx| {
-            let res: anyhow::Result<auth::tokens::Tokens> = crate::http::on_tokio(async move {
+            let res: anyhow::Result<auth::tokens::Tokens> = harmoniya_api::http::on_tokio(async move {
                 let access = ensure_token(tokens).await?;
                 if let Some((path, name)) = pending_skin {
                     let bytes = std::fs::read(&path)?;
@@ -210,7 +210,7 @@ impl SkinForm {
                         this.editor.status = Some(("Збережено!".into(), Some(true)));
                         this.state.update(cx, |s, cx| {
                             s.tokens = Some(tokens);
-                            let _ = crate::auth::storage::save(s.tokens.as_ref().unwrap());
+                            let _ = harmoniya_api::auth::storage::save(s.tokens.as_ref().unwrap());
                             s.fetch_skin_profile(cx);
                         });
                     }
@@ -232,7 +232,7 @@ impl SkinForm {
         cx.notify();
 
         cx.spawn(async move |this, cx| {
-            let res: anyhow::Result<auth::tokens::Tokens> = crate::http::on_tokio(async move {
+            let res: anyhow::Result<auth::tokens::Tokens> = harmoniya_api::http::on_tokio(async move {
                 let access = ensure_token(tokens).await?;
                 match kind {
                     Kind::Skin => yggdrasil::reset_skin(&access.access_token).await?,
@@ -247,7 +247,7 @@ impl SkinForm {
                         this.editor.status = Some(("Скинуто".into(), Some(true)));
                         this.state.update(cx, |s, cx| {
                             s.tokens = Some(tokens);
-                            let _ = crate::auth::storage::save(s.tokens.as_ref().unwrap());
+                            let _ = harmoniya_api::auth::storage::save(s.tokens.as_ref().unwrap());
                             s.fetch_skin_profile(cx);
                         });
                     }

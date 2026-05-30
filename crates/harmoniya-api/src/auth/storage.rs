@@ -2,7 +2,7 @@ use anyhow::Result;
 use keyring::Entry;
 
 use super::tokens::Tokens;
-use crate::persistence;
+use crate::config;
 
 const SERVICE: &str = "harmoniya-launcher";
 const USER: &str = "session";
@@ -16,7 +16,7 @@ pub fn load() -> Option<Tokens> {
             }
         }
     }
-    persistence::load_json::<Tokens>(FILE)
+    config::load_json::<Tokens>(FILE)
 }
 
 pub fn save(tokens: &Tokens) -> Result<()> {
@@ -26,9 +26,9 @@ pub fn save(tokens: &Tokens) -> Result<()> {
         .is_ok();
     if !keyring_ok {
         tracing::warn!("keyring unavailable, falling back to file");
-        persistence::save_json(FILE, tokens)?;
+        config::save_json(FILE, tokens)?;
     } else {
-        let _ = std::fs::remove_file(persistence::config_path(FILE).unwrap_or_default());
+        let _ = std::fs::remove_file(config::config_path(FILE).unwrap_or_default());
     }
     Ok(())
 }
@@ -37,5 +37,5 @@ pub fn clear() {
     if let Ok(entry) = Entry::new(SERVICE, USER) {
         let _ = entry.delete_credential();
     }
-    let _ = std::fs::remove_file(persistence::config_path(FILE).unwrap_or_default());
+    let _ = std::fs::remove_file(config::config_path(FILE).unwrap_or_default());
 }

@@ -16,8 +16,8 @@ use futures::channel::mpsc::UnboundedSender;
 use indexmap::IndexMap;
 use opys_runtime::{InstallError, InstallOptions, InstallProgress, LaunchOptions, ManifestSource};
 
-use crate::auth::{self, tokens::Tokens};
-use crate::services::account::fetch_me;
+use harmoniya_api::auth::{self, tokens::Tokens};
+use harmoniya_api::services::account::fetch_me;
 
 /// Throttle interval for per-file byte updates, matching the web `BYTE_THROTTLE_MS`.
 const BYTE_THROTTLE_MS: u64 = 250;
@@ -305,7 +305,7 @@ fn launch_vars(username: &str, uuid: &str, token: &str, root: &str) -> IndexMap<
 }
 
 /// Drive the full launch: resolve auth, install, spawn. Runs on the tokio
-/// runtime (call via `crate::http::on_tokio`). Reports everything over `tx`.
+/// runtime (call via `harmoniya_api::http::on_tokio`). Reports everything over `tx`.
 pub async fn run(
     tokens: Tokens,
     modpack_id: String,

@@ -3,15 +3,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use crate::auth::{self, tokens::Tokens};
-use crate::persistence;
-use crate::services::{
+use harmoniya_api::auth::{self, tokens::Tokens};
+use harmoniya_api::config;
+use harmoniya_api::services::{
     account::{User, fetch_me},
-    launch::{self, LaunchMsg, LaunchState},
     modpacks::{Modpack, ProjectGroup, fetch_all, group},
     options::{self, ModpackOptions},
     yggdrasil::{SkinModel, SkinProfile, fetch_profile},
 };
+use crate::services::launch::{self, LaunchMsg, LaunchState};
 use futures::StreamExt;
 
 #[derive(Clone, Debug)]
@@ -135,9 +135,9 @@ impl Global for MainWindow {}
 
 impl AppState {
     pub fn boot(cx: &mut App) -> Entity<Self> {
-        let selection: Selection = persistence::load_json("selection.json").unwrap_or_default();
-        let favourites: HashSet<String> = persistence::load_json("favourites.json").unwrap_or_default();
-        let settings: Settings = persistence::load_json("settings.json").unwrap_or_default();
+        let selection: Selection = config::load_json("selection.json").unwrap_or_default();
+        let favourites: HashSet<String> = config::load_json("favourites.json").unwrap_or_default();
+        let settings: Settings = config::load_json("settings.json").unwrap_or_default();
         let tokens = auth::storage::load();
 
         let entity = cx.new(|_| AppState {
@@ -200,7 +200,7 @@ impl AppState {
     /// set updates via the game listener once it's torn down.
     pub fn stop_game(&mut self, modpack_id: String, cx: &mut Context<Self>) {
         cx.background_spawn(async move {
-            crate::http::on_tokio(crate::game::stop(modpack_id)).await;
+            harmoniya_api::http::on_tokio(crate::game::stop(modpack_id)).await;
         })
         .detach();
     }
@@ -220,13 +220,13 @@ impl AppState {
         if !self.favourites.remove(&id) {
             self.favourites.insert(id);
         }
-        let _ = persistence::save_json("favourites.json", &self.favourites);
+        let _ = config::save_json("favourites.json", &self.favourites);
         cx.notify();
     }
 
     pub fn select_modpack(&mut self, id: Option<String>, cx: &mut Context<Self>) {
         self.selection.selected_modpack_id = id;
-        let _ = persistence::save_json("selection.json", &self.selection);
+        let _ = config::save_json("selection.json", &self.selection);
         cx.notify();
     }
 
@@ -303,7 +303,7 @@ impl AppState {
 
         // Worker runs the whole pipeline on the tokio runtime and reports via tx.
         cx.background_spawn(async move {
-            crate::http::on_tokio(launch::run(
+            harmoniya_api::http::on_tokio(launch::run(
                 tokens,
                 modpack_id,
                 manifest_url,
@@ -370,7 +370,7 @@ impl AppState {
 
     pub fn set_data_dir(&mut self, path: Option<String>, cx: &mut Context<Self>) {
         self.settings.data_dir = path.map(|p| p.trim().to_string()).filter(|s| !s.is_empty());
-        let _ = persistence::save_json("settings.json", &self.settings);
+        let _ = config::save_json("settings.json", &self.settings);
         cx.notify();
     }
 
@@ -378,7 +378,7 @@ impl AppState {
     /// Read by the window's close handler (via the global handle) in main.rs.
     pub fn set_close_to_tray(&mut self, enabled: bool, cx: &mut Context<Self>) {
         self.settings.close_to_tray = enabled;
-        let _ = persistence::save_json("settings.json", &self.settings);
+        let _ = config::save_json("settings.json", &self.settings);
         cx.notify();
     }
 
@@ -401,14 +401,14 @@ impl AppState {
             Some(v) => { entry.vars.insert(name, v); }
             None => { entry.vars.remove(&name); }
         }
-        let _ = persistence::save_json("settings.json", &self.settings);
+        let _ = config::save_json("settings.json", &self.settings);
         cx.notify();
     }
 
     /// Toggle a feature on/off for a modpack.
     pub fn set_feature(&mut self, modpack_id: String, name: String, enabled: bool, cx: &mut Context<Self>) {
         self.settings.modpack_options.entry(modpack_id).or_default().features.insert(name, enabled);
-        let _ = persistence::save_json("settings.json", &self.settings);
+        let _ = config::save_json("settings.json", &self.settings);
         cx.notify();
     }
 
@@ -443,7 +443,7 @@ impl AppState {
     pub fn fetch_user(&mut self, cx: &mut Context<Self>) {
         let Some(tokens) = self.tokens.clone() else { return; };
         cx.spawn(async move |this, cx| {
-            let result = crate::http::on_tokio(
+            let result = harmoniya_api::http::on_tokio(
                 with_access_token(tokens, |t| async move { fetch_me(&t).await })
             ).await;
             this.update(cx, |state, cx| {
@@ -469,7 +469,7 @@ impl AppState {
         self.modpacks_error = None;
         cx.notify();
         cx.spawn(async move |this, cx| {
-            let result = crate::http::on_tokio(fetch_all()).await;
+            let result = harmoniya_api::http::on_tokio(fetch_all()).await;
             this.update(cx, |state, cx| {
                 state.modpacks_loading = false;
                 match result {
@@ -518,7 +518,7 @@ impl AppState {
                 let format = guess_format(&url);
                 Some((url, Arc::new(Image::from_bytes(format, bytes))))
             });
-            let results = crate::http::on_tokio(futures::future::join_all(fetches)).await;
+            let results = harmoniya_api::http::on_tokio(futures::future::join_all(fetches)).await;
             this.update(cx, |state, cx| {
                 let mut added = false;
                 for r in results.into_iter().flatten() {
@@ -533,7 +533,7 @@ impl AppState {
     pub fn fetch_skin_profile(&mut self, cx: &mut Context<Self>) {
         let Some(tokens) = self.tokens.clone() else { return; };
         cx.spawn(async move |this, cx| {
-            let result = crate::http::on_tokio(
+            let result = harmoniya_api::http::on_tokio(
                 with_access_token(tokens, |t| async move {
                     fetch_profile(&t).await.map(|opt| opt.unwrap_or_default())
                 })
@@ -563,7 +563,7 @@ impl AppState {
         if self.head_cache.contains_key(&url) { return; }
         cx.spawn(async move |this, cx| {
             let fetch_url = url.clone();
-            let bytes = match crate::http::on_tokio(async move { fetch_image_bytes(&fetch_url).await }).await {
+            let bytes = match harmoniya_api::http::on_tokio(async move { fetch_image_bytes(&fetch_url).await }).await {
                 Ok(b) => b,
                 Err(_) => return,
             };
@@ -584,7 +584,7 @@ impl AppState {
         self.login_phase = LoginPhase::Waiting;
         cx.notify();
         let handle = cx.spawn(async move |this, cx| {
-            let result = crate::http::on_tokio(auth::run_login_flow(provider)).await;
+            let result = harmoniya_api::http::on_tokio(auth::run_login_flow(provider)).await;
             this.update(cx, |state, cx| {
                 state.pending_login_task = None;
                 match result {
@@ -656,7 +656,7 @@ fn is_auth_dead(err: &anyhow::Error) -> bool {
 }
 
 async fn fetch_image_bytes(url: &str) -> anyhow::Result<Vec<u8>> {
-    let bytes = crate::http::client()
+    let bytes = harmoniya_api::http::client()
         .get(url)
         .send()
         .await?
