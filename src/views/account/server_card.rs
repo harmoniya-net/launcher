@@ -11,9 +11,6 @@ use gpui::{
 use harmoniya_api::services::modpacks::Modpack;
 use crate::theme::Theme;
 
-/// Duration of the banner/shadow ease on hover & select. Tune here.
-const HOVER_FADE_MS: u64 = 240;
-
 /// `prev_h` / `target_h`: the height to tween from/to. Caller (ServerList)
 /// computes these based on the card's role in its group (active/neighbor/edge)
 /// and tracks the last rendered height so the animation always starts from the
@@ -25,13 +22,11 @@ pub fn server_card(
     hovered: bool,
     prev_h: f32,
     target_h: f32,
-    // Banner + bottom-shadow alphas to ease from/to this frame. `from == to`
-    // means no change (a resting card), so the animation is a no-op — the
-    // caller passes the card's previous alpha so only the changing card eases.
-    banner_from: f32,
-    banner_to: f32,
-    shadow_from: f32,
-    shadow_to: f32,
+    // Banner + bottom-shadow opacity for this frame. The caller eases these over
+    // the height-tween duration and passes the already-interpolated value, so
+    // they're applied statically here (no per-card animation to flicker siblings).
+    banner_opacity: f32,
+    shadow_opacity: f32,
     banner: Option<Arc<Image>>,
     on_select: impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
     on_hover: impl Fn(&bool, &mut Window, &mut gpui::App) + 'static,
@@ -70,19 +65,15 @@ pub fn server_card(
             Some(arc) => arc.into(),
             None => url.into(),
         };
-        // Banner opacity eases between dimmed (rest) and lit (hover/active) so
-        // the entry transitions smoothly rather than popping.
+        // Banner opacity (eased by the caller) — dimmed at rest, lit on
+        // hover/active — so the entry transitions smoothly rather than popping.
         let banner_img = img(source)
             .object_fit(ObjectFit::Cover)
             .absolute()
             .inset_0()
             .size_full()
             .rounded(Theme::radius_card())
-            .with_animation(
-                SharedString::from(format!("card-banner-{id}-{banner_to}")),
-                Animation::new(Duration::from_millis(HOVER_FADE_MS)).with_easing(ease_in_out),
-                move |this, t| this.opacity(banner_from + (banner_to - banner_from) * t),
-            );
+            .opacity(banner_opacity);
         card = card.child(banner_img);
         // Inner shadow from top and bottom: two gradient bands that fade dark
         // into transparent toward the card's vertical center. Each band covers
@@ -104,10 +95,8 @@ pub fn server_card(
                 linear_color_stop(dark, 1.0).opacity(0.0),
             ));
 
-        // Bottom inner-shadow band built at full strength; the element opacity
-        // carries the alpha so it can *ease* between rest/hover/active states
-        // instead of snapping. Keyed on the target so a resting card (from==to)
-        // holds steady and never re-animates when siblings re-render.
+        // Bottom inner-shadow band built at full strength; the (caller-eased)
+        // element opacity carries the alpha so the scrim lightens on hover/active.
         let bottom_band = div()
             .absolute()
             .bottom_0()
@@ -119,11 +108,7 @@ pub fn server_card(
                 linear_color_stop(dark, 0.0),
                 linear_color_stop(dark, 1.0).opacity(0.0),
             ))
-            .with_animation(
-                SharedString::from(format!("card-shadow-{id}-{shadow_to}")),
-                Animation::new(Duration::from_millis(HOVER_FADE_MS)).with_easing(ease_in_out),
-                move |this, t| this.opacity(shadow_from + (shadow_to - shadow_from) * t),
-            );
+            .opacity(shadow_opacity);
 
         card = card.child(top_band).child(bottom_band);
     }

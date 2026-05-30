@@ -47,17 +47,17 @@ const BANNER_LIT: f32 = 0.85;
 #[derive(Clone, Copy)]
 struct CardHeight { source: f32, target: f32, started_at: Instant }
 
-/// The banner + shadow ease endpoints currently in flight for a card. Held
-/// across the per-frame re-renders that drive the animation: `*_to` is the
-/// state's target, `*_from` the value the ease started at. Reset only when the
-/// target changes — otherwise re-storing the target every frame would collapse
-/// `from` onto `to` and the ease would snap.
+/// In-flight banner + shadow ease for a card, tracked exactly like [`CardHeight`]
+/// (source/target/started_at) so the list can compute the eased opacity per
+/// frame and apply it *statically* — no per-card `with_animation`, which (since
+/// the list re-renders every frame) GPUI would re-fire and flicker on siblings.
 #[derive(Clone, Copy)]
 struct CardVisual {
-    banner_from: f32,
-    banner_to: f32,
-    shadow_from: f32,
-    shadow_to: f32,
+    banner_src: f32,
+    banner_dst: f32,
+    shadow_src: f32,
+    shadow_dst: f32,
+    started_at: Instant,
 }
 
 fn ease_in_out(t: f32) -> f32 {
@@ -176,33 +176,48 @@ impl ServerList {
                 self.heights.insert(m.id.clone(), curr_state);
                 let prev = curr_state.source;
 
-                // Banner + shadow targets for this state. Keep the ease
-                // endpoints stable across the per-frame re-renders the height
-                // animation triggers; only restart (from = the previous target)
-                // when the target actually changes, so the ease doesn't snap.
-                let (banner_target, shadow_target) = if active {
+                // Banner + shadow targets for this state, eased over the same
+                // duration as the height tween (which is what drives the
+                // per-frame re-renders). Computed to a static opacity below; on
+                // a target change we continue from the current interpolated
+                // value so an interrupted ease doesn't jump.
+                let (banner_dst, shadow_dst) = if active {
                     (BANNER_LIT, SHADOW_ACTIVE)
                 } else if is_hovered {
                     (BANNER_LIT, SHADOW_HOVER)
                 } else {
                     (BANNER_REST, SHADOW_REST)
                 };
+                let ease_at = |start: Instant| {
+                    ease_in_out(
+                        (now.saturating_duration_since(start).as_secs_f32() * 1000.0 / ANIM_MS)
+                            .clamp(0.0, 1.0),
+                    )
+                };
                 let vis = match self.visuals.get(&m.id).copied() {
-                    Some(p) if p.banner_to == banner_target && p.shadow_to == shadow_target => p,
-                    Some(p) => CardVisual {
-                        banner_from: p.banner_to,
-                        banner_to: banner_target,
-                        shadow_from: p.shadow_to,
-                        shadow_to: shadow_target,
-                    },
+                    Some(p) if p.banner_dst == banner_dst && p.shadow_dst == shadow_dst => p,
+                    Some(p) => {
+                        let t = ease_at(p.started_at);
+                        CardVisual {
+                            banner_src: p.banner_src + (p.banner_dst - p.banner_src) * t,
+                            banner_dst,
+                            shadow_src: p.shadow_src + (p.shadow_dst - p.shadow_src) * t,
+                            shadow_dst,
+                            started_at: now,
+                        }
+                    }
                     None => CardVisual {
-                        banner_from: banner_target,
-                        banner_to: banner_target,
-                        shadow_from: shadow_target,
-                        shadow_to: shadow_target,
+                        banner_src: banner_dst,
+                        banner_dst,
+                        shadow_src: shadow_dst,
+                        shadow_dst,
+                        started_at: now,
                     },
                 };
                 self.visuals.insert(m.id.clone(), vis);
+                let vt = ease_at(vis.started_at);
+                let banner_opacity = vis.banner_src + (vis.banner_dst - vis.banner_src) * vt;
+                let shadow_opacity = vis.shadow_src + (vis.shadow_dst - vis.shadow_src) * vt;
 
                 let id = m.id.clone();
                 let banner = m
@@ -231,10 +246,8 @@ impl ServerList {
                     is_hovered,
                     prev,
                     target,
-                    vis.banner_from,
-                    vis.banner_to,
-                    vis.shadow_from,
-                    vis.shadow_to,
+                    banner_opacity,
+                    shadow_opacity,
                     banner,
                     move |_, _, cx| {
                         handle.update(cx, |s, cx| {
