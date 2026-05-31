@@ -1,6 +1,6 @@
 use crate::widgets::icon::icon;
 use gpui::{
-    div, prelude::FluentBuilder, px, rgb, AppContext, Context, Entity, FontWeight,
+    div, prelude::FluentBuilder, px, relative, rgb, AppContext, Context, Entity, FontWeight,
     InteractiveElement, IntoElement, MouseButton, ParentElement, Render, SharedString, Styled,
     Window,
 };
@@ -167,6 +167,8 @@ fn launcher_settings(
         .flex_col()
         .gap(px(16.))
         .size_full()
+        // Cap settings width so the rows aren't stretched across the whole pane.
+        .max_w(relative(0.75))
         .p(px(24.))
         .child(
             div()
