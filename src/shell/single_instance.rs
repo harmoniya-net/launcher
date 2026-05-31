@@ -11,6 +11,7 @@
 //! launch connects to it ([`signal_focus`]) to ask the primary to bring its
 //! window forward, then exits.
 
+use std::cell::RefCell;
 use std::net::{TcpListener, TcpStream};
 
 use futures::channel::mpsc::{unbounded, UnboundedReceiver};
@@ -39,9 +40,9 @@ fn lock_name() -> String {
 }
 
 pub enum Instance {
-    /// We're the only instance. The caller must keep the guard alive for the
-    /// process's lifetime to hold the lock; `None` means the guard couldn't be
-    /// created for some unrelated reason — run anyway, just unguarded.
+    /// We're the only instance. Pass the guard to [`hold`] to keep the lock for
+    /// the process's lifetime; `None` means the guard couldn't be created for
+    /// some unrelated reason — run anyway, just unguarded.
     Primary(Option<SingleInstance>),
     /// Another instance is already running.
     AlreadyRunning,
@@ -57,6 +58,26 @@ pub fn acquire() -> Instance {
             Instance::Primary(None)
         }
     }
+}
+
+thread_local! {
+    /// Holds the live guard for the process's lifetime — a thread-local rather
+    /// than a `main` local so the auto-updater can release it at the exact moment
+    /// it re-execs (see [`hold`]/[`release`]). Only ever touched on the main
+    /// thread, where both the app loop and the update task run.
+    static GUARD: RefCell<Option<SingleInstance>> = const { RefCell::new(None) };
+}
+
+/// Keep the primary's guard alive for the rest of the process.
+pub fn hold(instance: Option<SingleInstance>) {
+    GUARD.with(|g| *g.borrow_mut() = instance);
+}
+
+/// Drop the guard now, releasing the OS lock synchronously, so a child we're
+/// about to spawn can claim it cleanly. Used by the updater right before re-exec
+/// — this turns the relaunch into a deterministic hand-off instead of a race.
+pub fn release() {
+    GUARD.with(|g| drop(g.borrow_mut().take()));
 }
 
 /// Primary side: start listening for "focus me" pokes from duplicate launches.

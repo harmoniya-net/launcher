@@ -1,6 +1,7 @@
 pub mod account;
 pub mod login;
 pub mod skin;
+pub mod updating;
 
 use gpui::{Context, Entity};
 

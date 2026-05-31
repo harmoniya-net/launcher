@@ -2,12 +2,18 @@
 //! per-modpack option store.
 
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use gpui::{Context, Image};
 use harmoniya_api::config;
 use harmoniya_api::services::modpacks::{fetch_all, group};
 
 use super::{fetch_image_bytes, guess_format, AppEvent, AppState};
+
+/// Don't refetch the catalog from the live CMS more than once per this window;
+/// the select-server / regain-focus refreshes are best-effort freshness, not a
+/// reason to hammer prod.
+const CATALOG_REFRESH_COOLDOWN: Duration = Duration::from_secs(30);
 
 impl AppState {
     pub fn is_favourite(&self, modpack_id: &str) -> bool {
@@ -24,16 +30,59 @@ impl AppState {
     }
 
     pub fn select_modpack(&mut self, modpack_id: Option<String>, cx: &mut Context<Self>) {
+        let changed = self.selection.selected_modpack_id != modpack_id;
         self.selection.selected_modpack_id = modpack_id;
         let _ = config::save_json(config::SELECTION_FILE, &self.selection);
         cx.notify();
+        // Switching server is a natural moment to pull fresh CMS data.
+        if changed {
+            self.refresh_modpacks(cx);
+        }
     }
 
+    /// Initial catalog load: shows the loading state and surfaces errors.
     pub fn fetch_modpacks(&mut self, cx: &mut Context<Self>) {
-        if self.modpacks_loading { return; }
-        self.modpacks_loading = true;
+        if self.modpacks_loading {
+            return;
+        }
         self.modpacks_error = None;
-        cx.notify();
+        self.spawn_catalog_fetch(false, cx);
+    }
+
+    /// Silently re-pull the catalog, updating it in place — no loading flash, and
+    /// a transient failure keeps the current data. Triggered by switching server
+    /// and regaining focus; a no-op until the initial load has populated the
+    /// catalog, and rate-limited so we don't hammer the live CMS.
+    pub fn refresh_modpacks(&mut self, cx: &mut Context<Self>) {
+        if self.modpacks.is_empty() || self.modpacks_loading {
+            return;
+        }
+        if self.last_catalog_fetch.is_some_and(|t| t.elapsed() < CATALOG_REFRESH_COOLDOWN) {
+            return;
+        }
+        self.spawn_catalog_fetch(true, cx);
+    }
+
+    /// Manual refresh (Ctrl+R): refetch now, bypassing the background cooldown.
+    /// An empty catalog does a visible load; otherwise it refreshes in place.
+    pub fn reload_modpacks(&mut self, cx: &mut Context<Self>) {
+        if self.modpacks_loading {
+            return;
+        }
+        if self.modpacks.is_empty() {
+            self.modpacks_error = None;
+            self.spawn_catalog_fetch(false, cx);
+        } else {
+            self.spawn_catalog_fetch(true, cx);
+        }
+    }
+
+    fn spawn_catalog_fetch(&mut self, silent: bool, cx: &mut Context<Self>) {
+        self.modpacks_loading = true;
+        self.last_catalog_fetch = Some(Instant::now());
+        if !silent {
+            cx.notify(); // surface the loading state for the initial load
+        }
         cx.spawn(async move |this, cx| {
             let result = harmoniya_api::http::on_tokio(fetch_all()).await;
             this.update(cx, |state, cx| {
@@ -44,12 +93,15 @@ impl AppState {
                         state.modpacks = items;
                         state.prefetch_banners(cx);
                         cx.emit(AppEvent::ModpacksLoaded);
+                        cx.notify();
                     }
+                    // Keep the stale-but-valid catalog on a background refresh.
+                    Err(e) if silent => tracing::warn!("modpack refresh failed: {e}"),
                     Err(e) => {
                         state.modpacks_error = Some(e.to_string());
+                        cx.notify();
                     }
                 }
-                cx.notify();
             }).ok();
         }).detach();
     }

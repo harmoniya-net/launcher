@@ -17,21 +17,24 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use futures::StreamExt;
-use gpui::{px, size, App, AppContext, Application, Bounds, WindowBounds, WindowOptions};
+use gpui::{px, size, App, AppContext, Application, Bounds, KeyBinding, WindowBounds, WindowOptions};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use crate::app::Root;
 use crate::shell::tray::TrayCmd;
-use crate::shell::{desktop_integration, single_instance, tray, update};
+use crate::shell::{desktop_integration, single_instance, tray};
 use crate::state::{AppState, AppStateHandle, MainWindow};
+
+// Ctrl/Cmd+R — manually refresh the catalog from the CMS.
+gpui::actions!(harmoniya, [RefreshCatalog]);
 
 fn main() {
     init_logging();
 
     // Single instance: a second launch just exits (the guard only does mutual
-    // exclusion — it can't focus the running window). Held for the process's
-    // lifetime; dropping/exiting releases the OS lock.
-    let _instance = match single_instance::acquire() {
+    // exclusion — it can't focus the running window). Handed to `hold` so it
+    // lives for the process's lifetime; the updater releases it before re-exec.
+    let instance = match single_instance::acquire() {
         single_instance::Instance::AlreadyRunning => {
             tracing::info!("another instance is already running; focusing it and exiting");
             single_instance::signal_focus();
@@ -39,6 +42,7 @@ fn main() {
         }
         single_instance::Instance::Primary(guard) => guard,
     };
+    single_instance::hold(instance);
 
     Application::new()
         .with_assets(assets::Assets)
@@ -60,15 +64,23 @@ fn main() {
 
             let state = AppState::boot(cx);
 
+            // Ctrl/Cmd+R refreshes the catalog from the CMS (forces a fetch,
+            // bypassing the focus/select cooldown).
+            cx.bind_keys([
+                KeyBinding::new("ctrl-r", RefreshCatalog, None),
+                KeyBinding::new("cmd-r", RefreshCatalog, None),
+            ]);
+            cx.on_action(|_: &RefreshCatalog, cx: &mut App| {
+                let state = cx.global::<AppStateHandle>().0.clone();
+                state.update(cx, |s, cx| s.reload_modpacks(cx));
+            });
+
             // Install/refresh the .desktop entry + icons so the app shows our logo.
             desktop_integration::ensure();
 
-            // Self-update check, fire-and-forget on a blocking thread (self_update is sync).
-            std::thread::spawn(|| {
-                if let Err(e) = update::run_blocking() {
-                    tracing::warn!("self-update: {e}");
-                }
-            });
+            // Auto-update: check for a newer release; if one exists, take over the
+            // window with an updating screen, download it, and relaunch.
+            state.update(cx, |s, cx| s.check_for_update(cx));
 
             let bounds = Bounds::centered(None, size(px(1200.), px(760.)), cx);
             let window = cx
@@ -102,6 +114,17 @@ fn main() {
                             // closing the last window stops its loop, which would
                             // skip the graceful game shutdown that `begin_quit` runs.
                             false
+                        });
+                        // Pull fresh CMS data whenever the window regains focus —
+                        // restored from the tray, alt-tabbed back, etc. (Rate-limited
+                        // and a no-op until the catalog has first loaded.)
+                        state.update(cx, |_, cx| {
+                            cx.observe_window_activation(window, |s, window, cx| {
+                                if window.is_window_active() {
+                                    s.refresh_modpacks(cx);
+                                }
+                            })
+                            .detach();
                         });
                         cx.new(|cx| Root::new(state, cx))
                     },

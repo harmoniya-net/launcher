@@ -92,6 +92,7 @@ impl Render for Root {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let view = self.current.clone();
         let modal = self.state.read(cx).active_modal;
+        let updating = self.state.read(cx).update.clone();
 
         // Only the bundled Inter is used — no system-font fallbacks. (Emoji are
         // rendered as Twemoji images by the emoji/markdown widgets, not glyphs.)
@@ -103,19 +104,19 @@ impl Render for Root {
             style: FontStyle::Normal,
         };
 
-        div()
-            .relative()
-            .size_full()
-            .bg(Theme::bg())
-            .text_color(Theme::text())
-            .font(font)
-            .when_some(view, |this, v| this.child(v))
-            .when_some(modal, |this, m| {
-                this.child(match m {
-                    ActiveModal::Launch => self.launch_modal.clone().into_any_element(),
-                    ActiveModal::Settings => self.settings_modal.clone().into_any_element(),
-                    ActiveModal::News => self.news_modal.clone().into_any_element(),
-                })
+        let root = div().relative().size_full().bg(Theme::bg()).text_color(Theme::text()).font(font);
+
+        // An in-progress self-update takes over the whole window.
+        if let Some(phase) = updating {
+            return root.child(crate::views::updating::updating_view(&phase));
+        }
+
+        root.when_some(view, |this, v| this.child(v)).when_some(modal, |this, m| {
+            this.child(match m {
+                ActiveModal::Launch => self.launch_modal.clone().into_any_element(),
+                ActiveModal::Settings => self.settings_modal.clone().into_any_element(),
+                ActiveModal::News => self.news_modal.clone().into_any_element(),
             })
+        })
     }
 }

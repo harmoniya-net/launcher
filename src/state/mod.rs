@@ -8,6 +8,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::Instant;
 
 use futures::StreamExt;
 use gpui::{App, AppContext, Entity, EventEmitter, Global, Image, ImageFormat, Task};
@@ -28,6 +29,7 @@ mod launch_flow;
 mod session;
 mod skin;
 mod ui;
+mod update;
 
 #[derive(Clone, Debug, Default)]
 pub enum Route {
@@ -83,14 +85,28 @@ pub enum LoginPhase {
     Error(String),
 }
 
+/// Auto-update progress. While set, `Root` renders a full-window updating screen
+/// in place of the normal UI as a new release downloads and the app relaunches.
+#[derive(Clone, Debug)]
+pub enum UpdatePhase {
+    /// A newer release was found and is downloading (carries its version).
+    Downloading(String),
+    /// Download finished; the app is about to relaunch into the new binary.
+    Restarting,
+}
+
 pub struct AppState {
     pub route: Route,
+    /// When set, the auto-updater has taken over the window (see [`UpdatePhase`]).
+    pub update: Option<UpdatePhase>,
     pub tokens: Option<Tokens>,
     pub user: Option<User>,
     pub modpacks: Vec<Modpack>,
     pub groups: Vec<ProjectGroup>,
     pub modpacks_loading: bool,
     pub modpacks_error: Option<String>,
+    /// When the catalog was last (re)fetched, to rate-limit background refreshes.
+    pub last_catalog_fetch: Option<Instant>,
     pub selection: Selection,
     /// Modpack ids the user pinned to the Favourites group.
     pub favourites: HashSet<String>,
@@ -156,12 +172,14 @@ impl AppState {
 
         let entity = cx.new(|_| AppState {
             route: if tokens.is_some() { Route::Account } else { Route::Login },
+            update: None,
             tokens,
             user: None,
             modpacks: Vec::new(),
             groups: Vec::new(),
             modpacks_loading: false,
             modpacks_error: None,
+            last_catalog_fetch: None,
             selection,
             favourites,
             settings,
