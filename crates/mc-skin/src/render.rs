@@ -30,33 +30,33 @@ pub enum Model {
 }
 
 #[derive(Clone, Copy)]
-struct V3 {
+struct Vec3 {
     x: f32,
     y: f32,
     z: f32,
 }
 
-impl V3 {
+impl Vec3 {
     const fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
     }
 }
 
-fn rotate_y(p: V3, s: f32, c: f32) -> V3 {
-    V3::new(c * p.x + s * p.z, p.y, -s * p.x + c * p.z)
+fn rotate_y(p: Vec3, s: f32, c: f32) -> Vec3 {
+    Vec3::new(c * p.x + s * p.z, p.y, -s * p.x + c * p.z)
 }
-fn rotate_x(p: V3, s: f32, c: f32) -> V3 {
-    V3::new(p.x, c * p.y - s * p.z, s * p.y + c * p.z)
+fn rotate_x(p: Vec3, s: f32, c: f32) -> Vec3 {
+    Vec3::new(p.x, c * p.y - s * p.z, s * p.y + c * p.z)
 }
-fn rotate_z(p: V3, s: f32, c: f32) -> V3 {
-    V3::new(c * p.x - s * p.y, s * p.x + c * p.y, p.z)
+fn rotate_z(p: Vec3, s: f32, c: f32) -> Vec3 {
+    Vec3::new(c * p.x - s * p.y, s * p.x + c * p.y, p.z)
 }
 
 /// One axis-aligned box of the character.
 /// `origin` is the box center in model pixels; size + texture origin describe
 /// the source rect on the skin.
 struct Part {
-    origin: V3,
+    origin: Vec3,
     w: f32,
     h: f32,
     d: f32,
@@ -73,7 +73,7 @@ struct Part {
     /// Offset of the rotation pivot relative to the geometric centre, in
     /// model units. e.g. `(0, hy, 0)` pivots from the top of the box (used by
     /// the cape so it swings from the neck, not its middle).
-    pivot: V3,
+    pivot: Vec3,
 }
 
 /// Build the part list for a given arm model.
@@ -92,11 +92,11 @@ fn parts_for(model: Model, legacy: bool, t: f32) -> Vec<Part> {
     // smooth, always non-negative, and naturally eases at both ends — the
     // arms rest at the body, drift out, then drift back.
     let arm_sway = (t * 0.45).sin().powi(2) * 0.07; // 0..~4°
-    let shoulder_pivot = V3::new(0., 6., 0.); // top of arm box (shoulder)
+    let shoulder_pivot = Vec3::new(0., 6., 0.); // top of arm box (shoulder)
     vec![
         // body
         Part {
-            origin: V3::new(0., 18., 0.),
+            origin: Vec3::new(0., 18., 0.),
             w: 8.,
             h: 12.,
             d: 4.,
@@ -104,11 +104,11 @@ fn parts_for(model: Model, legacy: bool, t: f32) -> Vec<Part> {
             v: 16,
             expand: 0.0,
             rotate: (0.0, 0.0, 0.0),
-            pivot: V3::new(0., 0., 0.),
+            pivot: Vec3::new(0., 0., 0.),
         },
         // head
         Part {
-            origin: V3::new(0., 28., 0.),
+            origin: Vec3::new(0., 28., 0.),
             w: 8.,
             h: 8.,
             d: 8.,
@@ -116,12 +116,12 @@ fn parts_for(model: Model, legacy: bool, t: f32) -> Vec<Part> {
             v: 0,
             expand: 0.0,
             rotate: (0.0, 0.0, 0.0),
-            pivot: V3::new(0., 0., 0.),
+            pivot: Vec3::new(0., 0., 0.),
         },
         // right arm (character's right = model -X). Negative roll swings
         // the hand outward (away from body, in -X direction).
         Part {
-            origin: V3::new(-arm_cx, 18., 0.),
+            origin: Vec3::new(-arm_cx, 18., 0.),
             w: arm_w,
             h: 12.,
             d: 4.,
@@ -133,7 +133,7 @@ fn parts_for(model: Model, legacy: bool, t: f32) -> Vec<Part> {
         },
         // left arm — mirrored roll so both arms swing outward together.
         Part {
-            origin: V3::new(arm_cx, 18., 0.),
+            origin: Vec3::new(arm_cx, 18., 0.),
             w: arm_w,
             h: 12.,
             d: 4.,
@@ -145,7 +145,7 @@ fn parts_for(model: Model, legacy: bool, t: f32) -> Vec<Part> {
         },
         // right leg
         Part {
-            origin: V3::new(-2., 6., 0.),
+            origin: Vec3::new(-2., 6., 0.),
             w: 4.,
             h: 12.,
             d: 4.,
@@ -153,11 +153,11 @@ fn parts_for(model: Model, legacy: bool, t: f32) -> Vec<Part> {
             v: 16,
             expand: 0.0,
             rotate: (0.0, 0.0, 0.0),
-            pivot: V3::new(0., 0., 0.),
+            pivot: Vec3::new(0., 0., 0.),
         },
         // left leg
         Part {
-            origin: V3::new(2., 6., 0.),
+            origin: Vec3::new(2., 6., 0.),
             w: 4.,
             h: 12.,
             d: 4.,
@@ -165,11 +165,11 @@ fn parts_for(model: Model, legacy: bool, t: f32) -> Vec<Part> {
             v: l_leg_v,
             expand: 0.0,
             rotate: (0.0, 0.0, 0.0),
-            pivot: V3::new(0., 0., 0.),
+            pivot: Vec3::new(0., 0., 0.),
         },
         // hat (head overlay)
         Part {
-            origin: V3::new(0., 28., 0.),
+            origin: Vec3::new(0., 28., 0.),
             w: 8.,
             h: 8.,
             d: 8.,
@@ -177,17 +177,17 @@ fn parts_for(model: Model, legacy: bool, t: f32) -> Vec<Part> {
             v: 0,
             expand: 0.5,
             rotate: (0.0, 0.0, 0.0),
-            pivot: V3::new(0., 0., 0.),
+            pivot: Vec3::new(0., 0., 0.),
         },
     ]
 }
 
 #[derive(Clone, Copy)]
-struct Vert {
-    pos: V3,
+struct Vertex {
+    pos: Vec3,
     uv: (f32, f32),
 }
-struct Tri([Vert; 3]);
+struct Tri([Vertex; 3]);
 
 fn part_triangles(p: &Part, tex_scale: f32) -> Vec<Tri> {
     let hx = p.w / 2.0 + p.expand;
@@ -207,12 +207,12 @@ fn part_triangles(p: &Part, tex_scale: f32) -> Vec<Tri> {
     let (ys, yc) = yaw.sin_cos();
     let (rs, rc) = roll.sin_cos();
     let piv = p.pivot;
-    let place = |lx: f32, ly: f32, lz: f32| -> V3 {
-        let r = V3::new(lx - piv.x, ly - piv.y, lz - piv.z);
+    let place = |lx: f32, ly: f32, lz: f32| -> Vec3 {
+        let r = Vec3::new(lx - piv.x, ly - piv.y, lz - piv.z);
         let r = rotate_z(r, rs, rc);
         let r = rotate_x(r, ps, pc);
         let r = rotate_y(r, ys, yc);
-        V3::new(c.x + piv.x + r.x, c.y + piv.y + r.y, c.z + piv.z + r.z)
+        Vec3::new(c.x + piv.x + r.x, c.y + piv.y + r.y, c.z + piv.z + r.z)
     };
     let v000 = place(-hx, -hy, -hz);
     let v100 = place(hx, -hy, -hz);
@@ -232,7 +232,7 @@ fn part_triangles(p: &Part, tex_scale: f32) -> Vec<Tri> {
     // area of the interior texels.
     const E: f32 = 0.001;
     let mut face =
-        |p0: V3, p1: V3, p2: V3, p3: V3, u0: f32, v0: f32, u1: f32, v1: f32, v_flip: bool| {
+        |p0: Vec3, p1: Vec3, p2: Vec3, p3: Vec3, u0: f32, v0: f32, u1: f32, v1: f32, v_flip: bool| {
             let (lo_u, hi_u) = (u0.min(u1) + E, u0.max(u1) - E);
             let (lo_v, hi_v) = (v0.min(v1) + E, v0.max(v1) - E);
             // p0=BL of face, p1=BR, p2=TR, p3=TL.
@@ -244,14 +244,14 @@ fn part_triangles(p: &Part, tex_scale: f32) -> Vec<Tri> {
                 ((lo_u, hi_v), (hi_u, hi_v), (hi_u, lo_v), (lo_u, lo_v))
             };
             out.push(Tri([
-                Vert { pos: p0, uv: uv0 },
-                Vert { pos: p1, uv: uv1 },
-                Vert { pos: p2, uv: uv2 },
+                Vertex { pos: p0, uv: uv0 },
+                Vertex { pos: p1, uv: uv1 },
+                Vertex { pos: p2, uv: uv2 },
             ]));
             out.push(Tri([
-                Vert { pos: p0, uv: uv0 },
-                Vert { pos: p2, uv: uv2 },
-                Vert { pos: p3, uv: uv3 },
+                Vertex { pos: p0, uv: uv0 },
+                Vertex { pos: p2, uv: uv2 },
+                Vertex { pos: p3, uv: uv3 },
             ]));
         };
 
@@ -322,7 +322,7 @@ fn cape_part(t: f32) -> Part {
     Part {
         // Origin places the cape's pivot (top of geometry, at y = origin + hy)
         // right against the back of the upper body.
-        origin: V3::new(0., 16., -2.2),
+        origin: Vec3::new(0., 16., -2.2),
         w: 10.,
         h: 16.,
         d: 1.,
@@ -330,7 +330,7 @@ fn cape_part(t: f32) -> Part {
         v: 0,
         expand: 0.0,
         rotate: (-0.15 + cape_sway, std::f32::consts::PI, 0.0),
-        pivot: V3::new(0., 8., 0.),
+        pivot: Vec3::new(0., 8., 0.),
     }
 }
 
@@ -356,8 +356,8 @@ pub fn rasterize(
     let scale = SCALE * SS as f32;
     let cx = bw as f32 * 0.5;
     let cy = bh as f32 * 0.5;
-    let project = |p: V3| -> (f32, f32, f32) {
-        let q = V3::new(p.x, p.y - 16.0, p.z);
+    let project = |p: Vec3| -> (f32, f32, f32) {
+        let q = Vec3::new(p.x, p.y - 16.0, p.z);
         let q = rotate_y(q, ys, yc);
         let q = rotate_x(q, ps, pc);
         let sx = cx + q.x * scale;

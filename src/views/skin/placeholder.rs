@@ -13,6 +13,7 @@ pub struct Placeholder {
 
 impl Placeholder {
     pub fn new(state: Entity<AppState>, cx: &mut Context<Self>) -> Self {
+        crate::views::observe_repaint(&state, cx);
         let viewer = cx.new(|cx| SkinViewer::new(state.clone(), cx));
         Self { _state: state, viewer }
     }

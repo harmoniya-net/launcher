@@ -11,7 +11,7 @@ pub struct Description { state: Entity<AppState> }
 
 impl Description {
     pub fn new(state: Entity<AppState>, cx: &mut Context<Self>) -> Self {
-        cx.observe(&state, |_, _, cx| cx.notify()).detach();
+        crate::views::observe_repaint(&state, cx);
         Self { state }
     }
 }

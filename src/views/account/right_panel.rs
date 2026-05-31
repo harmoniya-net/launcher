@@ -13,7 +13,7 @@ pub struct RightPanel {
 
 impl RightPanel {
     pub fn new(state: Entity<AppState>, cx: &mut Context<Self>) -> Self {
-        cx.observe(&state, |_, _, cx| cx.notify()).detach();
+        crate::views::observe_repaint(&state, cx);
         let hero = cx.new(|cx| Hero::new(state.clone(), cx));
         let description = cx.new(|cx| Description::new(state.clone(), cx));
         let news = cx.new(|cx| NewsPanel::new(state.clone(), cx));

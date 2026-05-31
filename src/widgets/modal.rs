@@ -8,14 +8,16 @@ use gpui::{
 
 use crate::theme::Theme;
 
-type CloseCallback = Arc<dyn Fn(&mut App) + 'static>;
+/// Shared alias for a "fire this on close/dismiss" callback. Re-used by every
+/// modal view instead of each re-declaring its own identical `Callback` type.
+pub type OnClose = Arc<dyn Fn(&mut App) + 'static>;
 
 pub struct Modal {
     title: Option<String>,
     width: f32,
     height: f32,
     body: AnyElement,
-    on_close: Option<CloseCallback>,
+    on_close: Option<OnClose>,
 }
 
 impl Modal {

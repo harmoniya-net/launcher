@@ -1,14 +1,17 @@
 use std::path::PathBuf;
 
 use gpui::{
-    Context, Entity, FontWeight, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    Render, SharedString, StatefulInteractiveElement, Styled, Window, div, px,
+    Context, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement, Render,
+    StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use harmoniya_api::auth;
+use harmoniya_api::auth::tokens::Tokens;
 use harmoniya_api::services::yggdrasil::{self, SkinModel};
 use crate::state::AppState;
 use crate::theme::Theme;
+use super::skin_form_widgets::{
+    action_button, file_field, model_field, pick_png, reset_link,
+};
 
 const NO_FILE: &str = "файл не обрано";
 
@@ -28,7 +31,7 @@ pub struct SkinForm {
 
 impl SkinForm {
     pub fn new(state: Entity<AppState>, cx: &mut Context<Self>) -> Self {
-        cx.observe(&state, |_, _, cx| cx.notify()).detach();
+        crate::views::observe_repaint(&state, cx);
         Self { state, editor: EditorState::default() }
     }
 
@@ -189,8 +192,8 @@ impl SkinForm {
         cx.notify();
 
         cx.spawn(async move |this, cx| {
-            let res: anyhow::Result<auth::tokens::Tokens> = harmoniya_api::http::on_tokio(async move {
-                let access = ensure_token(tokens).await?;
+            let res: anyhow::Result<Tokens> = harmoniya_api::http::on_tokio(async move {
+                let (access, _) = harmoniya_api::auth::ensure_fresh(tokens).await?;
                 if let Some((path, name)) = pending_skin {
                     let bytes = std::fs::read(&path)?;
                     yggdrasil::upload_skin(&access.access_token, bytes, name, model).await?;
@@ -209,8 +212,7 @@ impl SkinForm {
                         this.editor.pending_cape = None;
                         this.editor.status = Some(("Збережено!".into(), Some(true)));
                         this.state.update(cx, |s, cx| {
-                            s.tokens = Some(tokens);
-                            let _ = harmoniya_api::auth::storage::save(s.tokens.as_ref().unwrap());
+                            s.adopt_tokens(Some(tokens));
                             s.fetch_skin_profile(cx);
                         });
                     }
@@ -232,8 +234,8 @@ impl SkinForm {
         cx.notify();
 
         cx.spawn(async move |this, cx| {
-            let res: anyhow::Result<auth::tokens::Tokens> = harmoniya_api::http::on_tokio(async move {
-                let access = ensure_token(tokens).await?;
+            let res: anyhow::Result<Tokens> = harmoniya_api::http::on_tokio(async move {
+                let (access, _) = harmoniya_api::auth::ensure_fresh(tokens).await?;
                 match kind {
                     Kind::Skin => yggdrasil::reset_skin(&access.access_token).await?,
                     Kind::Cape => yggdrasil::reset_cape(&access.access_token).await?,
@@ -246,8 +248,7 @@ impl SkinForm {
                     Ok(tokens) => {
                         this.editor.status = Some(("Скинуто".into(), Some(true)));
                         this.state.update(cx, |s, cx| {
-                            s.tokens = Some(tokens);
-                            let _ = harmoniya_api::auth::storage::save(s.tokens.as_ref().unwrap());
+                            s.adopt_tokens(Some(tokens));
                             s.fetch_skin_profile(cx);
                         });
                     }
@@ -259,195 +260,4 @@ impl SkinForm {
             }).ok();
         }).detach();
     }
-}
-
-async fn ensure_token(tokens: auth::tokens::Tokens) -> anyhow::Result<auth::tokens::Tokens> {
-    if tokens.is_access_expired() {
-        if let Some(refresh) = tokens.refresh_token.clone() {
-            return auth::coordinated_refresh(&refresh).await;
-        }
-    }
-    Ok(tokens)
-}
-
-fn pick_png() -> Option<PathBuf> {
-    native_dialog::DialogBuilder::file()
-        .add_filter("PNG", ["png"])
-        .open_single_file()
-        .show()
-        .ok()
-        .flatten()
-}
-
-/// Truncate from the start with a leading ellipsis so the *end* of the file
-/// name (extension, suffix) remains visible: "long-filename.png" → "…name.png".
-fn truncate_start(s: &str, max_chars: usize) -> String {
-    let count = s.chars().count();
-    if count <= max_chars { return s.to_string(); }
-    let kept: String = s.chars().skip(count - (max_chars - 1)).collect();
-    format!("…{kept}")
-}
-
-fn file_field(
-    label: &'static str,
-    name: String,
-    on_pick: impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
-) -> gpui::AnyElement {
-    div()
-        .flex()
-        .flex_col()
-        .gap(px(8.))
-        .child(
-            div()
-                .text_size(px(11.))
-                .font_weight(FontWeight::BOLD)
-                .text_color(Theme::text_faint())
-                .child(label),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .h(px(40.))
-                .bg(Theme::bg())
-                .rounded(Theme::radius_block())
-                .overflow_hidden()
-                .child(
-                    div()
-                        .id(SharedString::from(format!("pick-{label}")))
-                        .flex_shrink_0()
-                        .px(px(16.))
-                        .h_full()
-                        .flex()
-                        .items_center()
-                        .bg(Theme::surface_raised())
-                        .text_size(px(13.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(Theme::text())
-                        .cursor_pointer()
-                        .hover(|s| s.bg(gpui::rgb(0x4a4850)))
-                        .on_mouse_down(MouseButton::Left, on_pick)
-                        .child("Вибрати"),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w(px(0.))
-                        .px(px(14.))
-                        .text_size(px(13.))
-                        .text_color(Theme::text_faint())
-                        .child(truncate_start(&name, 24)),
-                ),
-        )
-        .into_any_element()
-}
-
-fn model_field(
-    model: SkinModel,
-    on_classic: impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
-    on_slim: impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
-) -> gpui::AnyElement {
-    div()
-        .flex()
-        .flex_col()
-        .gap(px(8.))
-        .child(
-            div()
-                .text_size(px(11.))
-                .font_weight(FontWeight::BOLD)
-                .text_color(Theme::text_faint())
-                .child("МОДЕЛЬ РУК"),
-        )
-        .child(
-            div()
-                .flex()
-                .gap(px(24.))
-                .child(radio("звичайна", model == SkinModel::Classic, on_classic))
-                .child(radio("тонка", model == SkinModel::Slim, on_slim)),
-        )
-        .into_any_element()
-}
-
-fn radio(
-    label: &'static str,
-    selected: bool,
-    on_click: impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
-) -> gpui::AnyElement {
-    div()
-        .id(SharedString::from(format!("radio-{label}")))
-        .flex()
-        .items_center()
-        .gap(px(9.))
-        .cursor_pointer()
-        .on_mouse_down(MouseButton::Left, on_click)
-        .child(
-            div()
-                .w(px(16.))
-                .h(px(16.))
-                .rounded_full()
-                .border_2()
-                .border_color(if selected { Theme::accent() } else { Theme::surface_raised() })
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(if selected {
-                    div().w(px(8.)).h(px(8.)).rounded_full().bg(Theme::accent()).into_any_element()
-                } else {
-                    div().into_any_element()
-                }),
-        )
-        .child(
-            div()
-                .text_size(px(14.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(if selected { Theme::text() } else { Theme::text_muted() })
-                .child(label),
-        )
-        .into_any_element()
-}
-
-fn action_button(
-    label: &'static str,
-    enabled: bool,
-    bg: gpui::Rgba,
-    on_click: impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
-) -> gpui::AnyElement {
-    let mut btn = div()
-        .id(SharedString::from(format!("action-{label}")))
-        .px(px(24.))
-        .py(px(10.))
-        .rounded(Theme::radius_block())
-        .bg(bg)
-        .text_color(gpui::rgb(0x0e0d0f))
-        .font_weight(FontWeight::BOLD)
-        .text_size(px(14.))
-        .child(label);
-    if enabled {
-        btn = btn.cursor_pointer().on_mouse_down(MouseButton::Left, on_click);
-    } else {
-        btn = btn.opacity(0.4);
-    }
-    btn.into_any_element()
-}
-
-fn reset_link(
-    label: &'static str,
-    enabled: bool,
-    on_click: impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
-) -> gpui::AnyElement {
-    let mut btn = div()
-        .id(SharedString::from(format!("reset-{label}")))
-        .text_size(px(12.))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(Theme::text_faint())
-        .child(label);
-    if enabled {
-        btn = btn
-            .cursor_pointer()
-            .hover(|s| s.text_color(Theme::status_offline()))
-            .on_mouse_down(MouseButton::Left, on_click);
-    } else {
-        btn = btn.opacity(0.35);
-    }
-    btn.into_any_element()
 }

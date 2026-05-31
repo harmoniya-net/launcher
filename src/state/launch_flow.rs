@@ -3,7 +3,6 @@
 
 use futures::StreamExt;
 use gpui::{AppContext, Context};
-use harmoniya_api::auth;
 use harmoniya_api::services::options;
 use harmoniya_launch::pipeline::{self as launch, LaunchMsg, LaunchState};
 
@@ -108,8 +107,7 @@ impl AppState {
     fn apply_launch_msg(&mut self, msg: LaunchMsg, cx: &mut Context<Self>) -> bool {
         match msg {
             LaunchMsg::TokensRefreshed(t) => {
-                let _ = auth::storage::save(&t);
-                self.tokens = Some(t);
+                self.adopt_tokens(Some(t));
                 false
             }
             LaunchMsg::Progress(p) => {

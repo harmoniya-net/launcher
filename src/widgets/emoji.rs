@@ -10,7 +10,7 @@ use unicode_segmentation::UnicodeSegmentation;
 const CDN: &str = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/72x72";
 
 /// A piece of a string: plain text, or an emoji resolved to an image URL.
-pub enum Seg {
+pub enum Segment {
     Text(String),
     Emoji(String),
 }
@@ -21,21 +21,21 @@ pub fn has_emoji(input: &str) -> bool {
 }
 
 /// Split into alternating text / emoji segments, in order.
-pub fn segment(input: &str) -> Vec<Seg> {
+pub fn segment(input: &str) -> Vec<Segment> {
     let mut segs = Vec::new();
     let mut text = String::new();
     for g in input.graphemes(true) {
         if emojis::get(g).is_some() {
             if !text.is_empty() {
-                segs.push(Seg::Text(std::mem::take(&mut text)));
+                segs.push(Segment::Text(std::mem::take(&mut text)));
             }
-            segs.push(Seg::Emoji(twemoji_url(g)));
+            segs.push(Segment::Emoji(twemoji_url(g)));
         } else {
             text.push_str(g);
         }
     }
     if !text.is_empty() {
-        segs.push(Seg::Text(text));
+        segs.push(Segment::Text(text));
     }
     segs
 }
@@ -49,8 +49,8 @@ pub fn line(text: &str, size: f32) -> Div {
     let mut row = div().flex().items_center().gap(px(2.)).overflow_hidden().text_size(px(size));
     for seg in segment(text) {
         row = match seg {
-            Seg::Text(t) => row.child(div().flex_shrink_0().child(t)),
-            Seg::Emoji(url) => row.child(img(url).w(glyph).h(glyph).flex_shrink_0()),
+            Segment::Text(t) => row.child(div().flex_shrink_0().child(t)),
+            Segment::Emoji(url) => row.child(img(url).w(glyph).h(glyph).flex_shrink_0()),
         };
     }
     row

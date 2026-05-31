@@ -3,7 +3,6 @@
 use std::sync::Arc;
 
 use gpui::{Context, Image, ImageFormat};
-use harmoniya_api::auth;
 use harmoniya_api::services::yggdrasil::{fetch_profile, SkinModel};
 
 use super::{fetch_image_bytes, is_auth_dead, with_access_token, AppEvent, AppState};
@@ -43,7 +42,7 @@ impl AppState {
             this.update(cx, |state, cx| {
                 match result {
                     Ok((profile, refreshed)) => {
-                        if let Some(t) = refreshed { state.tokens = Some(t.clone()); let _ = auth::storage::save(&t); }
+                        state.adopt_tokens(refreshed);
                         state.skin_profile = Some(profile);
                         state.prefetch_head(cx);
                         cx.emit(AppEvent::SkinProfileLoaded);

@@ -4,7 +4,7 @@ use gpui::{
 };
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
-use harmoniya_api::services::modpacks::Announcement;
+use harmoniya_api::services::modpacks::ModpackAnnouncement;
 use crate::state::AppState;
 use crate::theme::Theme;
 use crate::widgets::icon::icon;
@@ -13,14 +13,14 @@ pub struct NewsPanel { state: Entity<AppState> }
 
 impl NewsPanel {
     pub fn new(state: Entity<AppState>, cx: &mut Context<Self>) -> Self {
-        cx.observe(&state, |_, _, cx| cx.notify()).detach();
+        crate::views::observe_repaint(&state, cx);
         Self { state }
     }
 }
 
 impl Render for NewsPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut items: Vec<Announcement> = self.state.read(cx)
+        let mut items: Vec<ModpackAnnouncement> = self.state.read(cx)
             .selected_modpack()
             .map(|m| m.announcements.clone())
             .unwrap_or_default();
@@ -91,13 +91,13 @@ impl Render for NewsPanel {
     }
 }
 
-fn news_item(a: Announcement, state: &Entity<AppState>, idx: usize) -> gpui::AnyElement {
+fn news_item(a: ModpackAnnouncement, state: &Entity<AppState>, idx: usize) -> gpui::AnyElement {
     let (title, excerpt) = parse_body(&a.body);
     // GPUI doesn't wrap or ellipsize a single text run, so cap to one visible
     // line based on the ~252px content width inside the 280px panel.
     let title = truncate(&title, 30);
     let excerpt = truncate(&excerpt, 34);
-    let date_label = ua_relative_time(&a.date);
+    let date_label = relative_time_uk(&a.date);
     let body = a.body.clone();
     let state = state.clone();
     let id = SharedString::from(format!("news-{idx}"));
@@ -181,7 +181,7 @@ fn strip_md(s: &str) -> String {
         .to_string()
 }
 
-pub fn ua_relative_time(date_str: &str) -> String {
+pub fn relative_time_uk(date_str: &str) -> String {
     let now = OffsetDateTime::now_utc();
 
     let dt = if let Ok(dt) = OffsetDateTime::parse(date_str, &Rfc3339) {

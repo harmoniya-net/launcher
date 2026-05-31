@@ -10,22 +10,22 @@ use harmoniya_api::services::modpacks::{fetch_all, group};
 use super::{fetch_image_bytes, guess_format, AppEvent, AppState};
 
 impl AppState {
-    pub fn is_favourite(&self, id: &str) -> bool {
-        self.favourites.contains(id)
+    pub fn is_favourite(&self, modpack_id: &str) -> bool {
+        self.favourites.contains(modpack_id)
     }
 
     /// Pin/unpin a modpack to the Favourites group.
-    pub fn toggle_favourite(&mut self, id: String, cx: &mut Context<Self>) {
-        if !self.favourites.remove(&id) {
-            self.favourites.insert(id);
+    pub fn toggle_favourite(&mut self, modpack_id: String, cx: &mut Context<Self>) {
+        if !self.favourites.remove(&modpack_id) {
+            self.favourites.insert(modpack_id);
         }
-        let _ = config::save_json("favourites.json", &self.favourites);
+        let _ = config::save_json(config::FAVOURITES_FILE, &self.favourites);
         cx.notify();
     }
 
-    pub fn select_modpack(&mut self, id: Option<String>, cx: &mut Context<Self>) {
-        self.selection.selected_modpack_id = id;
-        let _ = config::save_json("selection.json", &self.selection);
+    pub fn select_modpack(&mut self, modpack_id: Option<String>, cx: &mut Context<Self>) {
+        self.selection.selected_modpack_id = modpack_id;
+        let _ = config::save_json(config::SELECTION_FILE, &self.selection);
         cx.notify();
     }
 
@@ -110,14 +110,14 @@ impl AppState {
             Some(v) => { entry.vars.insert(name, v); }
             None => { entry.vars.remove(&name); }
         }
-        let _ = config::save_json("settings.json", &self.settings);
+        let _ = config::save_json(config::SETTINGS_FILE, &self.settings);
         cx.notify();
     }
 
     /// Toggle a feature on/off for a modpack.
     pub fn set_feature(&mut self, modpack_id: String, name: String, enabled: bool, cx: &mut Context<Self>) {
         self.settings.modpack_options.entry(modpack_id).or_default().features.insert(name, enabled);
-        let _ = config::save_json("settings.json", &self.settings);
+        let _ = config::save_json(config::SETTINGS_FILE, &self.settings);
         cx.notify();
     }
 }

@@ -1,60 +1,13 @@
-use std::time::Duration;
-
 use gpui::{
-    Animation, AnimationExt, Context, Div, Entity, FontWeight, Hsla, ImageSource,
-    InteractiveElement, IntoElement, MouseButton, ObjectFit, ParentElement, Render, SharedString,
-    StatefulInteractiveElement, Styled, StyledImage, Svg, Window, div, hsla, img,
-    linear_color_stop, linear_gradient, px, rgb, svg,
+    Context, Entity, ImageSource, InteractiveElement, IntoElement, MouseButton, ObjectFit,
+    ParentElement, Render, Styled, StyledImage, Window, div, hsla, img, linear_color_stop,
+    linear_gradient, px,
 };
 
 use crate::state::{ActiveModal, AppState};
 use crate::theme::Theme;
+use crate::views::account::play_button::{PlayState, play_button};
 use crate::widgets::icon::icon;
-
-// The play button is the page's primary action: a minimal slanted (parallelogram)
-// tab, drawn via an SVG shape since GPUI divs can't skew, with the label overlaid.
-const BTN_W: f32 = 200.;
-const BTN_H: f32 = 52.;
-const HOVER_GREEN: u32 = 0x3cb371;
-const STOP_BG: u32 = 0xf25c63;
-const LABEL_DARK: u32 = 0x0e0d0f;
-
-/// The parallelogram fill, colored via `currentColor`; stretches to the button.
-fn btn_shape(fill: impl Into<Hsla>) -> Svg {
-    svg()
-        .path("icons/btn-shape.svg")
-        .text_color(fill)
-        .absolute()
-        .inset_0()
-        .size_full()
-}
-
-/// The centered icon + label overlay.
-fn btn_content(icon_svg: Option<&'static str>, label: &str, text: impl Into<Hsla>) -> Div {
-    let text = text.into();
-    let mut row = div()
-        .absolute()
-        .inset_0()
-        .flex()
-        .items_center()
-        .justify_center()
-        .gap(px(8.))
-        .font_weight(FontWeight::BOLD)
-        .text_size(px(15.))
-        .text_color(text);
-    if let Some(svg) = icon_svg {
-        row = row.child(icon(svg, 13., text));
-    }
-    row.child(label.to_string())
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum PlayState {
-    Online,
-    Offline,
-    Maintenance,
-    Unauthenticated,
-}
 
 pub struct Hero {
     state: Entity<AppState>,
@@ -67,7 +20,7 @@ pub struct Hero {
 
 impl Hero {
     pub fn new(state: Entity<AppState>, cx: &mut Context<Self>) -> Self {
-        cx.observe(&state, |_, _, cx| cx.notify()).detach();
+        crate::views::observe_repaint(&state, cx);
         Self { state, play_hovered: false, hover_seq: 0 }
     }
 }
@@ -121,95 +74,34 @@ impl Render for Hero {
 
         let play_handle = self.state.clone();
         let settings_handle = self.state.clone();
-        let play_disabled = play_state != PlayState::Online;
         let running = state.is_running(&modpack.id);
         let modpack_id = modpack.id.clone();
         let play_hovered = self.play_hovered;
 
-        let play_btn = if running {
-            // Running — offer to stop: red background, white label/icon.
-            div()
-                .id("play")
-                .relative()
-                .flex_shrink_0()
-                .w(px(BTN_W))
-                .h(px(BTN_H))
-                .cursor_pointer()
-                .hover(|s| s.opacity(0.9))
-                .child(btn_shape(rgb(STOP_BG)))
-                .child(btn_content(Some("icons/power.svg"), "Зупинити", rgb(0xffffff)))
-                .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                    let id = modpack_id.clone();
-                    play_handle.update(cx, |s, cx| s.stop_game(id, cx));
-                })
-                .into_any_element()
-        } else if !play_disabled {
-            // Playable — white tab with dark label; on hover a green layer (green
-            // shape + white label, in sync) fades in over the top.
-            let mut btn = div()
-                .id("play")
-                .relative()
-                .flex_shrink_0()
-                .w(px(BTN_W))
-                .h(px(BTN_H))
-                .cursor_pointer()
-                .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
-                    if *hovered {
-                        this.hover_seq += 1;
-                    }
-                    this.play_hovered = *hovered;
-                    cx.notify();
-                }))
-                .child(btn_shape(rgb(0xffffff)))
-                .child(btn_content(Some("icons/play.svg"), label, rgb(LABEL_DARK)));
-            if play_hovered {
-                // A clip box whose width animates 0 → full, revealing a fixed-size
-                // green layer (green shape + white label) from left to right.
-                let green = div()
-                    .absolute()
-                    .left(px(0.))
-                    .top(px(0.))
-                    .h(px(BTN_H))
-                    .overflow_hidden()
-                    .child(
-                        div()
-                            .flex_shrink_0()
-                            .relative()
-                            .w(px(BTN_W))
-                            .h(px(BTN_H))
-                            .child(btn_shape(rgb(HOVER_GREEN)))
-                            .child(btn_content(Some("icons/play.svg"), label, rgb(0xffffff))),
-                    )
-                    .with_animation(
-                        (SharedString::from("play-hover-green"), self.hover_seq),
-                        Animation::new(Duration::from_millis(260)).with_easing(|t| {
-                            let u = 1.0 - t;
-                            1.0 - u * u * u
-                        }),
-                        |el, t| el.w(px(BTN_W * t)),
-                    );
-                btn = btn.child(green);
+        let on_hover = cx.listener(|this, hovered: &bool, _, cx| {
+            if *hovered {
+                this.hover_seq += 1;
             }
-            btn.on_mouse_down(MouseButton::Left, move |_, _, cx| {
+            this.play_hovered = *hovered;
+            cx.notify();
+        });
+        let on_click = move |_: &gpui::MouseDownEvent, _: &mut Window, cx: &mut gpui::App| {
+            if running {
+                let id = modpack_id.clone();
+                play_handle.update(cx, |s, cx| s.stop_game(id, cx));
+            } else {
                 play_handle.update(cx, |s, cx| s.play(cx));
-            })
-            .into_any_element()
-        } else {
-            // Disabled: a muted (panel-tone) tab with status-colored label.
-            let color = match play_state {
-                PlayState::Maintenance => Theme::status_maintenance(),
-                PlayState::Offline => Theme::status_offline(),
-                _ => Theme::text_faint(),
-            };
-            div()
-                .relative()
-                .flex_shrink_0()
-                .w(px(BTN_W))
-                .h(px(BTN_H))
-                .child(btn_shape(Theme::surface()))
-                .child(btn_content(None, label, color))
-                .into_any_element()
+            }
         };
+        let play_btn = play_button(
+            play_state,
+            running,
+            label,
+            play_hovered,
+            self.hover_seq,
+            on_hover,
+            on_click,
+        );
 
         // Right side of the toolbar: favourite (star) toggle + settings.
         // Outline star when not pinned, filled when pinned — white either way.

@@ -30,6 +30,14 @@ impl Theme {
     pub fn accent() -> Rgba {
         rgb(0xff6699)
     }
+    /// Foreground (text/icon) drawn on top of accent or other light fills.
+    pub fn on_accent() -> Rgba {
+        rgb(0x0e0d0f)
+    }
+    /// Hover background for raised, interactive rows and buttons.
+    pub fn surface_hover() -> Rgba {
+        rgb(0x4a4850)
+    }
 
     pub fn status_online() -> Rgba {
         rgb(0x4ade80)

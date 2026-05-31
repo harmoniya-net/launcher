@@ -8,16 +8,13 @@ use crate::state::AppState;
 use crate::theme::Theme;
 use crate::widgets::icon::icon;
 
-/// Icons sit on the white login buttons, so they're drawn dark.
-const ICON_DARK: u32 = 0x0e0d0f;
-
 pub struct LoginView {
     pub state: Entity<AppState>,
 }
 
 impl LoginView {
     pub fn new(state: Entity<AppState>, cx: &mut Context<Self>) -> Self {
-        cx.observe(&state, |_, _, cx| cx.notify()).detach();
+        crate::views::observe_repaint(&state, cx);
         Self { state }
     }
 }
@@ -83,7 +80,7 @@ impl Render for LoginView {
                                         "Увійти з Harmoniya",
                                         "harmoniya-btn",
                                         "icons/harmoniya.svg",
-                                        rgb(ICON_DARK).into(),
+                                        Theme::on_accent().into(),
                                         move |_, _, cx| {
                                             harmoniya_handle.update(cx, |s, cx| {
                                                 s.login(Provider::Harmoniya, cx);
@@ -94,7 +91,7 @@ impl Render for LoginView {
                                         "Увійти з Discord",
                                         "discord-btn",
                                         "icons/discord.svg",
-                                        rgb(ICON_DARK).into(),
+                                        Theme::on_accent().into(),
                                         move |_, _, cx| {
                                             discord_handle.update(cx, |s, cx| {
                                                 s.login(Provider::Discord, cx);

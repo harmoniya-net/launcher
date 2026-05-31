@@ -147,9 +147,9 @@ impl Global for MainWindow {}
 
 impl AppState {
     pub fn boot(cx: &mut App) -> Entity<Self> {
-        let selection: Selection = config::load_json("selection.json").unwrap_or_default();
-        let favourites: HashSet<String> = config::load_json("favourites.json").unwrap_or_default();
-        let settings: Settings = config::load_json("settings.json").unwrap_or_default();
+        let selection: Selection = config::load_json(config::SELECTION_FILE).unwrap_or_default();
+        let favourites: HashSet<String> = config::load_json(config::FAVOURITES_FILE).unwrap_or_default();
+        let settings: Settings = config::load_json(config::SETTINGS_FILE).unwrap_or_default();
         let tokens = auth::storage::load();
 
         let entity = cx.new(|_| AppState {
@@ -212,25 +212,28 @@ impl AppState {
         let id = self.selection.selected_modpack_id.as_ref()?;
         self.modpacks.iter().find(|m| &m.id == id)
     }
+
+    /// Adopt + persist rotated tokens returned by a refresh, if any. The single
+    /// home for the "save the new tokens" tail every auth'd flow shares.
+    pub(crate) fn adopt_tokens(&mut self, refreshed: Option<Tokens>) {
+        if let Some(t) = refreshed {
+            let _ = auth::storage::save(&t);
+            self.tokens = Some(t);
+        }
+    }
 }
 
 // ── Shared helpers used across the concern submodules ───────────────────────
 
 /// Ensure the access token is fresh, run the async closure, and return its
 /// result alongside any rotated tokens the caller should persist.
-async fn with_access_token<T, F, Fut>(mut tokens: Tokens, f: F) -> anyhow::Result<(T, Option<Tokens>)>
+async fn with_access_token<T, F, Fut>(tokens: Tokens, f: F) -> anyhow::Result<(T, Option<Tokens>)>
 where
     F: Fn(String) -> Fut,
     Fut: std::future::Future<Output = anyhow::Result<T>>,
 {
-    let mut refreshed = None;
-    if tokens.is_access_expired() {
-        if let Some(refresh) = tokens.refresh_token.clone() {
-            let new = auth::coordinated_refresh(&refresh).await?;
-            tokens = new.clone();
-            refreshed = Some(new);
-        }
-    }
+    // Refresh up front if stale (shared with launch/skin via `auth::ensure_fresh`).
+    let (tokens, mut refreshed) = auth::ensure_fresh(tokens).await?;
     let value = match f(tokens.access_token.clone()).await {
         Ok(v) => v,
         Err(e) => {

@@ -7,7 +7,7 @@ use gpui::{
 use pulldown_cmark::{Event, HeadingLevel, Parser, Tag, TagEnd};
 
 use crate::theme::Theme;
-use crate::widgets::emoji::{self, Seg};
+use crate::widgets::emoji::{self, Segment};
 
 const TEXT_PX: f32 = 14.;
 
@@ -17,8 +17,8 @@ fn word_children(word: &str) -> Vec<AnyElement> {
     emoji::segment(word)
         .into_iter()
         .map(|seg| match seg {
-            Seg::Text(t) => div().child(t).into_any_element(),
-            Seg::Emoji(url) => img(url).w(e).h(e).flex_shrink_0().into_any_element(),
+            Segment::Text(t) => div().child(t).into_any_element(),
+            Segment::Emoji(url) => img(url).w(e).h(e).flex_shrink_0().into_any_element(),
         })
         .collect()
 }
@@ -57,6 +57,33 @@ enum Run {
     Link { text: String, url: String },
 }
 
+/// Split a sequence of runs into per-word flex items so `flex_wrap` can break
+/// long text at word boundaries (flex_wrap only wraps items, not text inside a
+/// single item, so a one-div-per-run approach would overflow). Plain runs use
+/// `color`; links open in the system browser and get ids prefixed `id_prefix`.
+fn runs_to_items(runs: Vec<Run>, color: Hsla, id_prefix: &str) -> Vec<AnyElement> {
+    let mut items: Vec<AnyElement> = Vec::new();
+    let mut idx = 0usize;
+    for run in runs {
+        match run {
+            Run::Text(t) => {
+                for word in t.split_whitespace() {
+                    items.push(text_word(word, color));
+                    idx += 1;
+                }
+            }
+            Run::Link { text, url } => {
+                let url = Arc::new(url);
+                for word in text.split_whitespace() {
+                    items.push(link_word(word, idx, id_prefix, url.clone()));
+                    idx += 1;
+                }
+            }
+        }
+    }
+    items
+}
+
 /// Render a small subset of markdown into GPUI elements.
 /// Links are rendered as clickable spans that open in the system browser.
 pub fn render(source: &str) -> AnyElement {
@@ -69,38 +96,14 @@ pub fn render(source: &str) -> AnyElement {
     let mut link_url: Option<String> = None;
 
     let mut heading: Option<HeadingLevel> = None;
-    let mut in_code = false;
     let mut in_blockquote = false;
     let mut list_items: Vec<String> = Vec::new();
-    let mut in_list = false;
 
     // Flush runs into a paragraph div and push to `out`.
-    // Each Run gets split into per-word flex items so flex_wrap can break
-    // long text at word boundaries (flex_wrap only wraps items, not text
-    // inside a single item, so a one-div-per-run approach would overflow).
     let flush_para = |runs: &mut Vec<Run>, out: &mut Vec<AnyElement>, blockquote: bool| {
         if runs.is_empty() { return; }
-        let mut items: Vec<AnyElement> = Vec::new();
-        let mut idx = 0usize;
-        for run in std::mem::take(runs) {
-            match run {
-                Run::Text(t) => {
-                    let color = if blockquote { Theme::text_faint() } else { Theme::text_secondary() };
-                    for word in t.split_whitespace() {
-                        items.push(text_word(word, color));
-                        idx += 1;
-                    }
-                }
-                Run::Link { text, url } => {
-                    let url = Arc::new(url);
-                    for word in text.split_whitespace() {
-                        let url = url.clone();
-                        items.push(link_word(word, idx, "md-link", url));
-                        idx += 1;
-                    }
-                }
-            }
-        }
+        let color = if blockquote { Theme::text_faint() } else { Theme::text_secondary() };
+        let items = runs_to_items(std::mem::take(runs), color.into(), "md-link");
         out.push(
             div()
                 .flex()
@@ -119,9 +122,8 @@ pub fn render(source: &str) -> AnyElement {
             // ── Block opens ──────────────────────────────────────────────
             Event::Start(tag) => match tag {
                 Tag::Heading { level, .. } => heading = Some(level),
-                Tag::CodeBlock(_) => { in_code = true; }
                 Tag::BlockQuote(_) => { in_blockquote = true; }
-                Tag::List(_) => { in_list = true; list_items.clear(); }
+                Tag::List(_) => { list_items.clear(); }
                 Tag::Item => buf.clear(),
                 Tag::Link { dest_url, .. } => {
                     // Flush any preceding plain text into a Text run
@@ -184,34 +186,18 @@ pub fn render(source: &str) -> AnyElement {
                                 .into_any_element(),
                         );
                     }
-                    in_code = false;
                 }
                 TagEnd::BlockQuote(_) => {
                     if !buf.is_empty() {
                         runs.push(Run::Text(std::mem::take(&mut buf)));
                     }
                     // Wrap blockquote paragraph runs in a border-left div.
-                    // Same per-word splitting as flush_para so long lines wrap.
                     if !runs.is_empty() {
-                        let mut items: Vec<AnyElement> = Vec::new();
-                        let mut idx = 0usize;
-                        for run in std::mem::take(&mut runs) {
-                            match run {
-                                Run::Text(t) => {
-                                    for word in t.split_whitespace() {
-                                        items.push(text_word(word, Theme::text_faint()));
-                                        idx += 1;
-                                    }
-                                }
-                                Run::Link { text, url } => {
-                                    let url = Arc::new(url);
-                                    for word in text.split_whitespace() {
-                                        items.push(link_word(word, idx, "md-bq-link", url.clone()));
-                                        idx += 1;
-                                    }
-                                }
-                            }
-                        }
+                        let items = runs_to_items(
+                            std::mem::take(&mut runs),
+                            Theme::text_faint().into(),
+                            "md-bq-link",
+                        );
                         out.push(
                             div()
                                 .pl(px(12.))
@@ -230,7 +216,6 @@ pub fn render(source: &str) -> AnyElement {
                     list_items.push(std::mem::take(&mut buf));
                 }
                 TagEnd::List(_) => {
-                    in_list = false;
                     let items = std::mem::take(&mut list_items);
                     out.push(
                         div()
@@ -274,8 +259,6 @@ pub fn render(source: &str) -> AnyElement {
             }
             _ => {}
         }
-
-        let _ = (in_code, in_list);
     }
 
     // Flush any trailing content

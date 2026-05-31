@@ -6,11 +6,11 @@ pub mod tokens;
 use anyhow::{Context, Result, anyhow};
 use serde::Deserialize;
 use std::sync::LazyLock;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
 use url::Url;
 
 use crate::http;
+use crate::now_ms;
 use tokens::Tokens;
 
 pub const ACCOUNT_SERVICE_BASE: &str = "https://account.harmoniya.net";
@@ -22,10 +22,6 @@ struct RawTokens {
     access_token: String,
     refresh_token: Option<String>,
     expires_in: Option<u64>,
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
 /// Runs the full OAuth2 PKCE flow: opens browser, runs a one-shot loopback listener,
@@ -135,6 +131,21 @@ pub async fn coordinated_refresh(refresh_token: &str) -> Result<Tokens> {
     Ok(new)
 }
 
+/// Ensure the access token is usable: if it's expired (or about to be) and we
+/// hold a refresh token, refresh it (coordinated across callers). Returns the
+/// tokens to use plus `Some(rotated)` when they changed, so the caller can
+/// persist + adopt the rotation. The single home for the "refresh if stale"
+/// step that every token consumer (account, skin, launch) needs.
+pub async fn ensure_fresh(tokens: Tokens) -> Result<(Tokens, Option<Tokens>)> {
+    if tokens.is_access_expired() {
+        if let Some(refresh) = tokens.refresh_token.clone() {
+            let rotated = coordinated_refresh(&refresh).await?;
+            return Ok((rotated.clone(), Some(rotated)));
+        }
+    }
+    Ok((tokens, None))
+}
+
 pub async fn refresh_tokens(refresh_token: &str) -> Result<Tokens> {
     let form = [
         ("grant_type", "refresh_token"),
@@ -161,7 +172,7 @@ pub async fn refresh_tokens(refresh_token: &str) -> Result<Tokens> {
     })
 }
 
-pub async fn get_yggdrasil_token(access_token: &str) -> Result<String> {
+pub async fn fetch_yggdrasil_token(access_token: &str) -> Result<String> {
     #[derive(Deserialize)]
     struct R { token: Option<String> }
     let r: R = http::client()

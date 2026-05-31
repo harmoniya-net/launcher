@@ -55,7 +55,7 @@ struct TextureMeta {
 }
 
 pub async fn fetch_profile(access_token: &str) -> Result<Option<SkinProfile>> {
-    let ygg_token = auth::get_yggdrasil_token(access_token).await?;
+    let ygg_token = auth::fetch_yggdrasil_token(access_token).await?;
     let parts: Vec<&str> = ygg_token.split('.').collect();
     if parts.len() < 2 { return Err(anyhow!("malformed yggdrasil token")); }
     let payload = URL_SAFE_NO_PAD
@@ -98,7 +98,7 @@ pub async fn fetch_profile(access_token: &str) -> Result<Option<SkinProfile>> {
 }
 
 pub async fn upload_skin(access_token: &str, bytes: Vec<u8>, filename: String, model: SkinModel) -> Result<()> {
-    let ygg_token = auth::get_yggdrasil_token(access_token).await?;
+    let ygg_token = auth::fetch_yggdrasil_token(access_token).await?;
     let form = Form::new()
         .part("file", Part::bytes(bytes).file_name(filename).mime_str("image/png")?)
         .text("variant", model.as_form_str());
@@ -114,7 +114,7 @@ pub async fn upload_skin(access_token: &str, bytes: Vec<u8>, filename: String, m
 }
 
 pub async fn upload_cape(access_token: &str, bytes: Vec<u8>, filename: String) -> Result<()> {
-    let ygg_token = auth::get_yggdrasil_token(access_token).await?;
+    let ygg_token = auth::fetch_yggdrasil_token(access_token).await?;
     let form = Form::new()
         .part("file", Part::bytes(bytes).file_name(filename).mime_str("image/png")?);
     let resp = http::client()
@@ -137,7 +137,7 @@ pub async fn reset_cape(access_token: &str) -> Result<()> {
 }
 
 async fn delete_active(access_token: &str, kind: &str) -> Result<()> {
-    let ygg_token = auth::get_yggdrasil_token(access_token).await?;
+    let ygg_token = auth::fetch_yggdrasil_token(access_token).await?;
     let resp = http::client()
         .delete(format!("{YGGDRASIL_BASE}/minecraft/profile/{kind}/active"))
         .bearer_auth(ygg_token)

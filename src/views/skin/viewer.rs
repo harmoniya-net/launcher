@@ -158,23 +158,7 @@ impl SkinViewer {
             Source::Preview(bytes) => {
                 let key = Source::Preview(bytes.clone());
                 cx.spawn(async move |this, cx| {
-                    let Ok(decoded) = image::load_from_memory(&bytes) else {
-                        return;
-                    };
-                    let rgba = decoded.to_rgba8();
-                    this.update(cx, |s, cx| {
-                        if !s.current_source(is_skin).same(&key) {
-                            return;
-                        }
-                        if is_skin {
-                            s.skin = Some(rgba);
-                        } else {
-                            s.cape = Some(rgba);
-                        }
-                        s.rendered = None;
-                        cx.notify();
-                    })
-                    .ok();
+                    Self::decode_and_store(&this, cx, &bytes, is_skin, &key);
                 })
                 .detach();
             }
@@ -195,27 +179,40 @@ impl SkinViewer {
                         Ok(b) => b.to_vec(),
                         Err(_) => return,
                     };
-                    let Ok(decoded) = image::load_from_memory(&bytes) else {
-                        return;
-                    };
-                    let rgba = decoded.to_rgba8();
-                    this.update(cx, |s, cx| {
-                        if !s.current_source(is_skin).same(&key) {
-                            return;
-                        }
-                        if is_skin {
-                            s.skin = Some(rgba);
-                        } else {
-                            s.cape = Some(rgba);
-                        }
-                        s.rendered = None;
-                        cx.notify();
-                    })
-                    .ok();
+                    Self::decode_and_store(&this, cx, &bytes, is_skin, &key);
                 })
                 .detach();
             }
         }
+    }
+
+    /// Decode raw image `bytes` and, if the load still matches `key` (i.e. the
+    /// source wasn't superseded mid-flight), store the RGBA into the skin/cape
+    /// slot and invalidate the render cache. Shared by both load paths.
+    fn decode_and_store(
+        this: &gpui::WeakEntity<Self>,
+        cx: &mut gpui::AsyncApp,
+        bytes: &[u8],
+        is_skin: bool,
+        key: &Source,
+    ) {
+        let Ok(decoded) = image::load_from_memory(bytes) else {
+            return;
+        };
+        let rgba = decoded.to_rgba8();
+        this.update(cx, |s, cx| {
+            if !s.current_source(is_skin).same(key) {
+                return;
+            }
+            if is_skin {
+                s.skin = Some(rgba);
+            } else {
+                s.cape = Some(rgba);
+            }
+            s.rendered = None;
+            cx.notify();
+        })
+        .ok();
     }
 
     fn current_source(&self, is_skin: bool) -> Source {

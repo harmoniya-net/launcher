@@ -7,9 +7,7 @@
 //! over an unbounded channel so the launch modal can render exactly like the web
 //! `LaunchModal.vue` (phase label, percent bar, per-file rows, error block).
 
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use futures::channel::mpsc::UnboundedSender;
@@ -19,8 +17,8 @@ use opys_runtime::{InstallError, InstallOptions, InstallProgress, LaunchOptions,
 use harmoniya_api::auth::{self, tokens::Tokens};
 use harmoniya_api::services::account::fetch_me;
 
-/// Throttle interval for per-file byte updates, matching the web `BYTE_THROTTLE_MS`.
-const BYTE_THROTTLE_MS: u64 = 250;
+mod progress;
+use progress::Tracker;
 
 /// Install/launch phases and the percent window each occupies on the overall
 /// bar. Mirrors `PHASE_RANGES` / `PHASE_LABELS` in the web handler.
@@ -52,7 +50,7 @@ impl Phase {
     }
 
     /// Short label used in the error footer (`PHASE_LABELS` in `LaunchModal.vue`).
-    pub fn short(self) -> &'static str {
+    pub fn short_label(self) -> &'static str {
         match self {
             Phase::Resolve => "отримання маніфесту",
             Phase::Download => "завантаження",
@@ -124,10 +122,6 @@ pub enum LaunchMsg {
     Done { pid: u32 },
 }
 
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
-
 /// Default game data directory, matching the web `defaultDataDir()`.
 pub fn default_data_dir() -> String {
     #[cfg(target_os = "windows")]
@@ -188,96 +182,6 @@ fn uuid_from_ygg(ygg_token: &str) -> anyhow::Result<String> {
     Ok(uuid.replace('-', ""))
 }
 
-/// Accumulates raw `InstallProgress` callbacks into a `LaunchProgress` snapshot,
-/// porting the bookkeeping from the web SSE handler.
-#[derive(Default)]
-struct Tracker {
-    files: HashMap<String, FileState>,
-    download_fetched: u32,
-    download_total: u32,
-    phase: Option<Phase>,
-}
-
-struct FileState {
-    bytes: u64,
-    total: Option<u64>,
-    last_emit: u64,
-}
-
-impl Tracker {
-    fn percent(&self) -> u8 {
-        let Some(phase) = self.phase else { return 0 };
-        let (lo, hi) = phase.range();
-        let pct = if phase != Phase::Download {
-            lo
-        } else if self.download_total == 0 {
-            hi
-        } else {
-            lo + (hi - lo) * (self.download_fetched as f32 / self.download_total as f32)
-        };
-        pct.round().clamp(0., 100.) as u8
-    }
-
-    fn snapshot(&self) -> LaunchProgress {
-        let mut files: Vec<LaunchFile> = self
-            .files
-            .iter()
-            .map(|(path, s)| LaunchFile { path: path.clone(), bytes: s.bytes, total: s.total })
-            .collect();
-        files.sort_by(|a, b| a.path.cmp(&b.path));
-        LaunchProgress { phase: self.phase.unwrap_or(Phase::Resolve), percent: self.percent(), files }
-    }
-
-    /// Apply one raw progress event. Returns `Some(snapshot)` when the UI should
-    /// re-render (mirrors which events the web handler emits on).
-    fn apply(&mut self, p: InstallProgress) -> Option<LaunchProgress> {
-        match p {
-            InstallProgress::Resolve | InstallProgress::Pointer { .. } => {
-                self.phase = Some(Phase::Resolve);
-                Some(self.snapshot())
-            }
-            InstallProgress::Download { fetched, total, .. } => {
-                self.phase = Some(Phase::Download);
-                self.download_fetched = fetched;
-                self.download_total = total;
-                Some(self.snapshot())
-            }
-            InstallProgress::DownloadStart { path, total } => {
-                self.phase = Some(Phase::Download);
-                self.files.insert(
-                    path,
-                    FileState { bytes: 0, total: (total > 0).then_some(total), last_emit: 0 },
-                );
-                Some(self.snapshot())
-            }
-            InstallProgress::DownloadBytes { path, bytes } => {
-                let now = now_ms();
-                let s = self.files.get_mut(&path)?;
-                s.bytes = bytes;
-                if now.saturating_sub(s.last_emit) < BYTE_THROTTLE_MS {
-                    return None;
-                }
-                s.last_emit = now;
-                Some(self.snapshot())
-            }
-            InstallProgress::DownloadDone { path } => {
-                self.files.remove(&path);
-                None
-            }
-            InstallProgress::Verify => {
-                self.phase = Some(Phase::Verify);
-                self.files.clear();
-                Some(self.snapshot())
-            }
-            InstallProgress::Extract { .. } => {
-                self.phase = Some(Phase::Extract);
-                Some(self.snapshot())
-            }
-            InstallProgress::Sweep { .. } => None,
-        }
-    }
-}
-
 fn classify(err: &InstallError, phase: Option<Phase>) -> LaunchError {
     let (code, paths) = match err {
         InstallError::Network { .. } => (ErrorCode::Network, Vec::new()),
@@ -330,7 +234,7 @@ pub async fn run(
 
 #[allow(clippy::too_many_arguments)]
 async fn run_inner(
-    mut tokens: Tokens,
+    tokens: Tokens,
     modpack_id: String,
     manifest_url: &str,
     data_dir: &str,
@@ -339,20 +243,18 @@ async fn run_inner(
     tx: &UnboundedSender<LaunchMsg>,
     tracker: Arc<Mutex<Tracker>>,
 ) -> Result<u32, InstallError> {
-    // Refresh the access token up front if it's expired, then adopt + persist it.
-    if tokens.is_access_expired() {
-        if let Some(refresh) = tokens.refresh_token.clone() {
-            let refreshed = auth::coordinated_refresh(&refresh)
-                .await
-                .map_err(|e| InstallError::other(format!("token refresh: {e}")))?;
-            tokens = refreshed.clone();
-            let _ = tx.unbounded_send(LaunchMsg::TokensRefreshed(refreshed));
-        }
+    // Refresh the access token up front if stale (shared `auth::ensure_fresh`),
+    // forwarding any rotation to the UI so it can persist + adopt it.
+    let (tokens, rotated) = auth::ensure_fresh(tokens)
+        .await
+        .map_err(|e| InstallError::other(format!("token refresh: {e}")))?;
+    if let Some(new) = rotated {
+        let _ = tx.unbounded_send(LaunchMsg::TokensRefreshed(new));
     }
     let access = tokens.access_token.clone();
 
     let user = fetch_me(&access).await.map_err(|e| InstallError::other(e.to_string()))?;
-    let ygg_token = auth::get_yggdrasil_token(&access)
+    let ygg_token = auth::fetch_yggdrasil_token(&access)
         .await
         .map_err(|e| InstallError::other(e.to_string()))?;
     let uuid = uuid_from_ygg(&ygg_token).map_err(|e| InstallError::other(e.to_string()))?;

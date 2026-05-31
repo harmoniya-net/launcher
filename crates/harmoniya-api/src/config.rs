@@ -7,6 +7,12 @@ const QUALIFIER: &str = "net";
 const ORG: &str = "harmoniya";
 const APP: &str = "launcher";
 
+/// Canonical names of the JSON config files, so the same string isn't re-spelled
+/// at every load/save site (a typo there silently reads/writes the wrong file).
+pub const SETTINGS_FILE: &str = "settings.json";
+pub const SELECTION_FILE: &str = "selection.json";
+pub const FAVOURITES_FILE: &str = "favourites.json";
+
 pub fn project_dirs() -> Result<ProjectDirs> {
     ProjectDirs::from(QUALIFIER, ORG, APP)
         .context("no home directory available for ProjectDirs")

@@ -12,3 +12,14 @@ pub mod auth;
 pub mod config;
 pub mod http;
 pub mod services;
+
+use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Milliseconds since the Unix epoch (saturating to 0 if the clock predates it).
+/// One definition shared by token expiry, refresh, and the launch pipeline.
+pub fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}

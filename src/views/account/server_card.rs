@@ -5,32 +5,32 @@ use gpui::{
     Animation, AnimationExt, AnyElement, FontWeight, Image, ImageSource, InteractiveElement,
     IntoElement, MouseButton, ObjectFit, ParentElement, SharedString, StatefulInteractiveElement,
     StyledImage, Styled, Window, div, ease_in_out, hsla, img, linear_color_stop, linear_gradient,
-    px, rgb,
+    px,
 };
 
 use harmoniya_api::services::modpacks::Modpack;
 use crate::theme::Theme;
 
-/// `prev_h` / `target_h`: the height to tween from/to. Caller (ServerList)
-/// computes these based on the card's role in its group (active/neighbor/edge)
-/// and tracks the last rendered height so the animation always starts from the
-/// real current position rather than a hardcoded inverse.
-#[allow(clippy::too_many_arguments)]
+use super::card_anim::CardFrame;
+
+/// `frame.prev_h` / `frame.target_h`: the height to tween from/to. Caller
+/// (ServerList) computes these based on the card's role in its group
+/// (active/neighbor/edge) and tracks the last rendered height so the animation
+/// always starts from the real current position rather than a hardcoded inverse.
+/// `frame.banner_opacity` / `frame.shadow_opacity`: the banner + bottom-shadow
+/// opacity for this frame. The caller eases these over the height-tween duration
+/// and passes the already-interpolated value, so they're applied statically here
+/// (no per-card animation to flicker siblings).
 pub fn server_card(
     m: Modpack,
     active: bool,
     hovered: bool,
-    prev_h: f32,
-    target_h: f32,
-    // Banner + bottom-shadow opacity for this frame. The caller eases these over
-    // the height-tween duration and passes the already-interpolated value, so
-    // they're applied statically here (no per-card animation to flicker siblings).
-    banner_opacity: f32,
-    shadow_opacity: f32,
+    frame: CardFrame,
     banner: Option<Arc<Image>>,
     on_select: impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
     on_hover: impl Fn(&bool, &mut Window, &mut gpui::App) + 'static,
 ) -> AnyElement {
+    let CardFrame { prev_h, target_h, banner_opacity, shadow_opacity } = frame;
     let id = m.id.clone();
     let status = derive_status(&m);
     let banner_url = m
@@ -160,7 +160,7 @@ pub fn server_card(
                         .px(px(10.))
                         .py(px(6.))
                         .rounded(Theme::radius_block())
-                        .bg(rgb(0x0e0d0f))
+                        .bg(Theme::on_accent())
                         .child(
                             div()
                                 .text_size(px(12.))

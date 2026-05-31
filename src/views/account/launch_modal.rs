@@ -8,18 +8,16 @@ use gpui::{
 use harmoniya_launch::pipeline::{LaunchError, LaunchProgress, LaunchState};
 use crate::state::AppState;
 use crate::theme::Theme;
-use crate::widgets::modal::Modal;
-
-type Callback = Arc<dyn Fn(&mut App) + 'static>;
+use crate::widgets::modal::{Modal, OnClose};
 
 pub struct LaunchModal {
     state: Entity<AppState>,
-    on_close: Callback,
+    on_close: OnClose,
 }
 
 impl LaunchModal {
     pub fn new(state: Entity<AppState>, on_close: impl Fn(&mut App) + 'static, cx: &mut Context<Self>) -> Self {
-        cx.observe(&state, |_, _, cx| cx.notify()).detach();
+        crate::views::observe_repaint(&state, cx);
         Self { state, on_close: Arc::new(on_close) }
     }
 }
@@ -160,7 +158,7 @@ fn error_view(e: &LaunchError, retry: impl Fn(&mut App) + 'static) -> gpui::AnyE
     let code_line = {
         let mut s = format!("{:?}", e.code).to_uppercase();
         if let Some(phase) = e.phase {
-            s = format!("{s} · {}", phase.short());
+            s = format!("{s} · {}", phase.short_label());
         }
         s
     };
@@ -227,11 +225,11 @@ fn error_view(e: &LaunchError, retry: impl Fn(&mut App) + 'static) -> gpui::AnyE
                 .py(px(10.))
                 .rounded(px(2.))
                 .bg(Theme::text())
-                .text_color(gpui::rgb(0x0e0d0f))
+                .text_color(Theme::on_accent())
                 .text_size(px(13.))
                 .font_weight(FontWeight::BOLD)
                 .cursor_pointer()
-                .hover(|s| s.bg(gpui::rgb(0xffffff)))
+                .hover(|s| s.bg(Theme::text()))
                 .on_mouse_down(MouseButton::Left, move |_, _, cx| {
                     cx.stop_propagation();
                     retry(cx);

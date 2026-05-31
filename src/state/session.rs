@@ -16,7 +16,7 @@ impl AppState {
             this.update(cx, |state, cx| {
                 match result {
                     Ok((user, refreshed)) => {
-                        if let Some(t) = refreshed { state.tokens = Some(t.clone()); let _ = auth::storage::save(&t); }
+                        state.adopt_tokens(refreshed);
                         state.user = Some(user);
                         cx.emit(AppEvent::UserLoaded);
                         cx.notify();

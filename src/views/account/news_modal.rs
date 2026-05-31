@@ -3,18 +3,16 @@ use std::sync::Arc;
 use gpui::{App, Context, Entity, InteractiveElement, IntoElement, ParentElement, Render, StatefulInteractiveElement, Styled, Window, div, px};
 
 use crate::state::AppState;
-use crate::widgets::{markdown, modal::Modal};
-
-type Callback = Arc<dyn Fn(&mut App) + 'static>;
+use crate::widgets::{markdown, modal::{Modal, OnClose}};
 
 pub struct NewsModal {
     state: Entity<AppState>,
-    on_close: Callback,
+    on_close: OnClose,
 }
 
 impl NewsModal {
     pub fn new(state: Entity<AppState>, on_close: impl Fn(&mut App) + 'static, cx: &mut Context<Self>) -> Self {
-        cx.observe(&state, |_, _, cx| cx.notify()).detach();
+        crate::views::observe_repaint(&state, cx);
         Self { state, on_close: Arc::new(on_close) }
     }
 }

@@ -35,7 +35,7 @@ impl AppState {
 
     pub fn set_data_dir(&mut self, path: Option<String>, cx: &mut Context<Self>) {
         self.settings.data_dir = path.map(|p| p.trim().to_string()).filter(|s| !s.is_empty());
-        let _ = config::save_json("settings.json", &self.settings);
+        let _ = config::save_json(config::SETTINGS_FILE, &self.settings);
         cx.notify();
     }
 
@@ -43,7 +43,7 @@ impl AppState {
     /// Read by the window's close handler (via the global handle) in main.rs.
     pub fn set_close_to_tray(&mut self, enabled: bool, cx: &mut Context<Self>) {
         self.settings.close_to_tray = enabled;
-        let _ = config::save_json("settings.json", &self.settings);
+        let _ = config::save_json(config::SETTINGS_FILE, &self.settings);
         cx.notify();
     }
 }

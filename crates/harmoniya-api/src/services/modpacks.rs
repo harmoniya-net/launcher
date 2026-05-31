@@ -33,18 +33,18 @@ where T: Default + Deserialize<'de>, D: Deserializer<'de> {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct Banner {
+pub struct ModpackBanner {
     #[serde(default)] pub url: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Status {
+pub struct ServerStatus {
     #[serde(default)] pub online: i32,
     #[serde(default)] pub max: i32,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct Logo {
+pub struct ProjectLogo {
     #[serde(default)] pub url: Option<String>,
 }
 
@@ -53,11 +53,11 @@ pub struct Project {
     pub id: String,
     pub title: String,
     #[serde(default)] pub order: i32,
-    #[serde(default)] pub logo: Logo,
+    #[serde(default)] pub logo: ProjectLogo,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Announcement {
+pub struct ModpackAnnouncement {
     pub body: String,
     pub date: String,
 }
@@ -69,13 +69,13 @@ pub struct Modpack {
     #[serde(default)] pub summary: Option<String>,
     #[serde(default)] pub version: Option<String>,
     #[serde(rename = "manifestUrl")] pub manifest_url: String,
-    #[serde(default)] pub banner: Option<Banner>,
+    #[serde(default)] pub banner: Option<ModpackBanner>,
     #[serde(default)] pub maintaining: bool,
     #[serde(default)] pub order: i32,
     #[serde(default)] pub description: Option<String>,
-    #[serde(default)] pub status: Option<Status>,
+    #[serde(default)] pub status: Option<ServerStatus>,
     pub project: Project,
-    #[serde(default, deserialize_with = "null_default")] pub announcements: Vec<Announcement>,
+    #[serde(default, deserialize_with = "null_default")] pub announcements: Vec<ModpackAnnouncement>,
     #[serde(default)] pub options: Vec<options::Field>,
 }
 

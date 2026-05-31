@@ -16,7 +16,7 @@ pub struct AccountView {
 
 impl AccountView {
     pub fn new(state: Entity<AppState>, cx: &mut Context<Self>) -> Self {
-        cx.observe(&state, |_, _, cx| cx.notify()).detach();
+        crate::views::observe_repaint(&state, cx);
         let server_list = cx.new(|cx| ServerList::new(state.clone(), cx));
         let user_bar = cx.new(|cx| UserBar::new(state.clone(), cx));
         let right_panel = cx.new(|cx| RightPanel::new(state.clone(), cx));
