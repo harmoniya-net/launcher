@@ -18,9 +18,13 @@ impl AppState {
     }
 
     pub fn close_modal(&mut self, cx: &mut Context<Self>) {
-        // Closing the launch modal abandons any in-flight install (the UI stops
-        // updating; the download itself keeps running, matching the web cancel).
+        // Closing the launch modal cancels any in-flight install: the worker's
+        // `install` returns promptly with downloads aborted, and dropping the
+        // task tears down the progress-receiver loop.
         if self.active_modal == Some(ActiveModal::Launch) {
+            if let Some(cancel) = self.launch_cancel.take() {
+                cancel.cancel();
+            }
             self.launch_task = None;
             self.launch_state = LaunchState::Idle;
         }

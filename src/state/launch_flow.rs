@@ -73,6 +73,10 @@ impl AppState {
         let saved = self.settings.modpack_options.get(&modpack.id).cloned().unwrap_or_default();
         let (extra_vars, features) = options::resolve(&modpack.options, &saved);
 
+        // Cancellation handle so closing the launch modal aborts the install.
+        let cancel = launch::CancellationToken::new();
+        self.launch_cancel = Some(cancel.clone());
+
         // Worker runs the whole pipeline on the tokio runtime and reports via tx.
         cx.background_spawn(async move {
             harmoniya_api::http::on_tokio(launch::run(
@@ -82,6 +86,7 @@ impl AppState {
                 data_dir,
                 extra_vars,
                 features,
+                cancel,
                 tx,
             ))
             .await;

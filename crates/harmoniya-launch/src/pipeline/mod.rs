@@ -13,6 +13,8 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use futures::channel::mpsc::UnboundedSender;
 use indexmap::IndexMap;
 use opys_runtime::{InstallError, InstallOptions, InstallProgress, LaunchOptions, ManifestSource};
+/// Re-exported so the app can mint a token and cancel an in-flight install.
+pub use opys_runtime::CancellationToken;
 
 use harmoniya_api::auth::{self, tokens::Tokens};
 use harmoniya_api::services::account::fetch_me;
@@ -204,7 +206,9 @@ fn launch_vars(username: &str, uuid: &str, token: &str, root: &str) -> IndexMap<
 }
 
 /// Drive the full launch: resolve auth, install, spawn. Runs on the tokio
-/// runtime (call via `harmoniya_api::http::on_tokio`). Reports everything over `tx`.
+/// runtime (call via `harmoniya_api::http::on_tokio`). Reports everything over
+/// `tx`. Cancelling `cancel` aborts an in-flight install (downloads included).
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     tokens: Tokens,
     modpack_id: String,
@@ -212,6 +216,7 @@ pub async fn run(
     data_dir: String,
     extra_vars: IndexMap<String, String>,
     features: Vec<String>,
+    cancel: CancellationToken,
     tx: UnboundedSender<LaunchMsg>,
 ) {
     // The progress callback fires on the tokio runtime and must be `Fn`, so the
@@ -223,7 +228,7 @@ pub async fn run(
     };
 
     let result =
-        run_inner(tokens, modpack_id, &manifest_url, &data_dir, extra_vars, features, &tx, Arc::clone(&tracker))
+        run_inner(tokens, modpack_id, &manifest_url, &data_dir, extra_vars, features, cancel, &tx, Arc::clone(&tracker))
             .await;
     let msg = match result {
         Ok(pid) => LaunchMsg::Done { pid },
@@ -240,6 +245,7 @@ async fn run_inner(
     data_dir: &str,
     extra_vars: IndexMap<String, String>,
     features: Vec<String>,
+    cancel: CancellationToken,
     tx: &UnboundedSender<LaunchMsg>,
     tracker: Arc<Mutex<Tracker>>,
 ) -> Result<u32, InstallError> {
@@ -285,6 +291,7 @@ async fn run_inner(
     install_opts.vars = Some(vars.clone());
     install_opts.features = features.clone();
     install_opts.on_progress = Some(on_progress);
+    install_opts.cancel = cancel;
     opys_runtime::install(ManifestSource::Url(manifest_url), install_opts).await?;
 
     // Build the spec and spawn the game without re-installing.

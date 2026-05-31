@@ -21,7 +21,7 @@ use harmoniya_api::services::{
     options::ModpackOptions,
     yggdrasil::{SkinModel, SkinProfile},
 };
-use harmoniya_launch::pipeline::LaunchState;
+use harmoniya_launch::pipeline::{CancellationToken, LaunchState};
 
 mod catalog;
 mod launch_flow;
@@ -110,6 +110,8 @@ pub struct AppState {
     pub launch_state: LaunchState,
     /// Keeps the progress-receiver loop alive while a launch is in flight.
     pub launch_task: Option<Task<()>>,
+    /// Cancels the in-flight install when the launch modal is closed.
+    pub launch_cancel: Option<CancellationToken>,
     /// Modpack ids whose game is currently running (mirrors `game`'s registry).
     pub running: HashSet<String>,
     /// Keeps the running-set watcher loop alive for the app's lifetime.
@@ -171,6 +173,7 @@ impl AppState {
             pending_login_task: None,
             launch_state: LaunchState::Idle,
             launch_task: None,
+            launch_cancel: None,
             running: HashSet::new(),
             running_task: None,
             active_modal: None,
