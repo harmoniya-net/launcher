@@ -1,21 +1,22 @@
-//! The hero's primary play/stop button (slanted SVG tab + label overlay) and
-//! its three visual states. Extracted from `hero.rs`.
+//! The hero's primary play/stop button (rounded tab + label overlay) and its
+//! three visual states. Extracted from `hero.rs`.
 
 use std::time::Duration;
 
 use gpui::{
     Animation, AnimationExt, App, AnyElement, Div, FontWeight, Hsla, InteractiveElement,
     IntoElement, MouseButton, MouseDownEvent, ParentElement, SharedString,
-    StatefulInteractiveElement, Styled, Svg, Window, div, px, rgb, svg,
+    StatefulInteractiveElement, Styled, Window, div, px, rgb,
 };
 
 use crate::theme::Theme;
 use crate::widgets::icon::icon;
 
-// The play button is the page's primary action: a minimal slanted (parallelogram)
-// tab, drawn via an SVG shape since GPUI divs can't skew, with the label overlaid.
+// The play button is the page's primary action: a rounded tab with the label
+// overlaid (and, on the playable state, a green hover layer that wipes in).
 const BTN_W: f32 = 200.;
-const BTN_H: f32 = 52.;
+const BTN_H: f32 = 48.;
+const BTN_RADIUS: f32 = 8.;
 const HOVER_GREEN: u32 = 0x3cb371;
 const STOP_BG: u32 = 0xf25c63;
 
@@ -27,14 +28,14 @@ pub(crate) enum PlayState {
     Unauthenticated,
 }
 
-/// The parallelogram fill, colored via `currentColor`; stretches to the button.
-fn btn_shape(fill: impl Into<Hsla>) -> Svg {
-    svg()
-        .path("icons/btn-shape.svg")
-        .text_color(fill)
+/// The rounded button fill; stretches to fill the button.
+fn btn_fill(fill: impl Into<Hsla>) -> Div {
+    div()
         .absolute()
         .inset_0()
         .size_full()
+        .rounded(px(BTN_RADIUS))
+        .bg(fill.into())
 }
 
 /// The centered icon + label overlay.
@@ -81,7 +82,7 @@ pub(crate) fn play_button(
             .h(px(BTN_H))
             .cursor_pointer()
             .hover(|s| s.opacity(0.9))
-            .child(btn_shape(rgb(STOP_BG)))
+            .child(btn_fill(rgb(STOP_BG)))
             .child(btn_content(Some("icons/power.svg"), "Зупинити", Theme::text()))
             .on_mouse_down(MouseButton::Left, on_click)
             .into_any_element()
@@ -96,24 +97,29 @@ pub(crate) fn play_button(
             .h(px(BTN_H))
             .cursor_pointer()
             .on_hover(on_hover)
-            .child(btn_shape(rgb(0xffffff)))
+            .child(btn_fill(rgb(0xffffff)))
             .child(btn_content(Some("icons/play.svg"), label, Theme::on_accent()));
         if play_hovered {
-            // A clip box whose width animates 0 → full, revealing a fixed-size
-            // green layer (green shape + white label) from left to right.
+            // A clip box whose height animates 0 → full, revealing a fixed-size
+            // green layer (green fill + white label) from the bottom up. The inner
+            // layer is bottom-aligned (justify_end) so it stays put as the clip
+            // grows, rather than sliding into view.
             let green = div()
                 .absolute()
                 .left(px(0.))
-                .top(px(0.))
-                .h(px(BTN_H))
+                .bottom(px(0.))
+                .w(px(BTN_W))
                 .overflow_hidden()
+                .flex()
+                .flex_col()
+                .justify_end()
                 .child(
                     div()
                         .flex_shrink_0()
                         .relative()
                         .w(px(BTN_W))
                         .h(px(BTN_H))
-                        .child(btn_shape(rgb(HOVER_GREEN)))
+                        .child(btn_fill(rgb(HOVER_GREEN)))
                         .child(btn_content(Some("icons/play.svg"), label, Theme::text())),
                 )
                 .with_animation(
@@ -122,7 +128,7 @@ pub(crate) fn play_button(
                         let u = 1.0 - t;
                         1.0 - u * u * u
                     }),
-                    |el, t| el.w(px(BTN_W * t)),
+                    |el, t| el.h(px(BTN_H * t)),
                 );
             btn = btn.child(green);
         }
@@ -139,7 +145,7 @@ pub(crate) fn play_button(
             .flex_shrink_0()
             .w(px(BTN_W))
             .h(px(BTN_H))
-            .child(btn_shape(Theme::surface()))
+            .child(btn_fill(Theme::surface()))
             .child(btn_content(None, label, color))
             .into_any_element()
     }
