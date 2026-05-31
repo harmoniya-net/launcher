@@ -8,7 +8,6 @@ use super::{
 };
 
 pub struct AccountView {
-    pub state: Entity<AppState>,
     server_list: Entity<ServerList>,
     user_bar: Entity<UserBar>,
     right_panel: Entity<RightPanel>,
@@ -27,7 +26,7 @@ impl AccountView {
             if s.skin_profile.is_none() { s.fetch_skin_profile(cx); }
         });
 
-        Self { state, server_list, user_bar, right_panel }
+        Self { server_list, user_bar, right_panel }
     }
 }
 

@@ -45,7 +45,7 @@ pub(crate) fn launcher_settings(
                         .text_size(px(11.))
                         .font_weight(FontWeight::BOLD)
                         .text_color(Theme::text_faint())
-                        .child("КАТАЛОГ ВСТАНОВЛЕННЯ"),
+                        .child("ТЕКА ВСТАНОВЛЕННЯ"),
                 )
                 .child(
                     div()

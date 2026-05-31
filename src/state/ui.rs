@@ -7,8 +7,8 @@ use super::{ActiveModal, AppEvent, AppState, LaunchState, Route};
 
 impl AppState {
     pub fn set_route(&mut self, route: Route, cx: &mut Context<Self>) {
-        self.route = route.clone();
-        cx.emit(AppEvent::Routed(route));
+        self.route = route;
+        cx.emit(AppEvent::Routed);
         cx.notify();
     }
 

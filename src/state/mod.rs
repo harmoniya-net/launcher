@@ -128,7 +128,7 @@ pub struct AppState {
 }
 
 pub enum AppEvent {
-    Routed(Route),
+    Routed,
     AuthChanged,
     ModpacksLoaded,
     UserLoaded,

@@ -1,10 +1,10 @@
 use gpui::{
     Context, Entity, FontWeight, Hsla, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    Render, Styled, Window, div, px, rgb,
+    Render, Styled, Window, div, prelude::FluentBuilder, px, rgb,
 };
 
 use harmoniya_api::auth::Provider;
-use crate::state::AppState;
+use crate::state::{AppState, LoginPhase};
 use crate::theme::Theme;
 use crate::widgets::icon::icon;
 
@@ -20,10 +20,14 @@ impl LoginView {
 }
 
 impl Render for LoginView {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let state_handle = self.state.clone();
         let harmoniya_handle = state_handle.clone();
         let discord_handle = state_handle;
+        let login_error = match &self.state.read(cx).login_phase {
+            LoginPhase::Error(msg) => Some(msg.clone()),
+            _ => None,
+        };
 
         div()
             .flex()
@@ -97,7 +101,18 @@ impl Render for LoginView {
                                                 s.login(Provider::Discord, cx);
                                             });
                                         },
-                                    )),
+                                    ))
+                                    .when_some(login_error, |col, msg| {
+                                        col.child(
+                                            div()
+                                                .pt(px(2.))
+                                                .text_size(px(13.))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(Theme::status_offline())
+                                                .w_full()
+                                                .child(msg),
+                                        )
+                                    }),
                             ),
                     ),
             )
