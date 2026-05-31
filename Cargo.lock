@@ -2846,7 +2846,7 @@ dependencies = [
 
 [[package]]
 name = "harmoniya-launcher"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "anyhow",
  "directories",
@@ -4460,9 +4460,9 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "opys-core"
-version = "0.1.7"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cc66707bc5a4aed21e89c0467cd4928df1870d0660283da877416763bb06923"
+checksum = "08a5ca865b1e81cb1b5026d145589a878882aa367ea58754ecb736c953477056"
 dependencies = [
  "base64",
  "indexmap",
@@ -4475,9 +4475,9 @@ dependencies = [
 
 [[package]]
 name = "opys-mojang-rules"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2366ec7d628577ef87fea3dab765aecbf48e34aea55b4be914a4b10dce2c7ba1"
+checksum = "a7b100d96e34713f99e8b27e2f0dfb3a4c3a9fe47b56a2f03ccba566565a91f3"
 dependencies = [
  "regex",
  "serde",
@@ -4486,9 +4486,9 @@ dependencies = [
 
 [[package]]
 name = "opys-runtime"
-version = "0.1.7"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e3b41fc1b07da62fc7969675227d1144ed44ffe6d9e3188d7ec6dbf6198dd77"
+checksum = "de03e085cbb974078e54f9edf6c80f8156becc2116947910be6c8a041e98f7bf"
 dependencies = [
  "base64",
  "bytes",
@@ -4509,6 +4509,7 @@ dependencies = [
  "tar",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "zip",
 ]
 
