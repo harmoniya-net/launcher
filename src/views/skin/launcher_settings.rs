@@ -13,6 +13,8 @@ use crate::theme::Theme;
 use crate::widgets::icon::icon;
 use crate::widgets::toggle::toggle_switch;
 
+use super::skin_form_widgets::truncate_start;
+
 /// Launcher-wide settings (the Launcher tab): the install directory (`${root}`)
 /// where modpacks are downloaded, plus the close-to-tray behavior toggle.
 pub(crate) fn launcher_settings(
@@ -30,8 +32,8 @@ pub(crate) fn launcher_settings(
         .flex_col()
         .gap(px(16.))
         .size_full()
-        // Cap settings width so the rows aren't stretched across the whole pane.
-        .max_w(relative(0.75))
+        // Cap settings width to 60% of the pane so inputs match the skin tab.
+        .max_w(relative(0.6))
         .p(px(24.))
         .child(
             div()
@@ -110,14 +112,13 @@ pub(crate) fn launcher_settings(
                 .child(
                     div()
                         .flex_1()
+                        .min_w(px(0.))
                         .pr(px(14.))
                         .text_size(px(13.))
                         .text_color(Theme::text_faint())
-                        .child(if is_default {
-                            format!("{effective}  ·  за замовчуванням")
-                        } else {
-                            effective.clone()
-                        }),
+                        // Leading ellipsis keeps the install folder (the path's
+                        // meaningful tail) visible instead of cutting it off.
+                        .child(truncate_start(&effective, 40)),
                 ),
         )
         .child(close_to_tray_section(state, close_to_tray))

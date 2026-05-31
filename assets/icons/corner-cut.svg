@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Lower-left triangle filled with currentColor. Placed at the card's
+       bottom-left corner (square element) it shaves that corner at 45°. -->
+  <polygon points="0,0 0,100 100,100" fill="currentColor"/>
+</svg>

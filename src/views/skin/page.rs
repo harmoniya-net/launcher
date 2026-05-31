@@ -52,16 +52,17 @@ impl Render for SkinView {
 
         div()
             .flex()
-            .gap(px(16.))
-            .p(px(24.))
+            .gap(Theme::panel_gap())
+            .p(Theme::screen_pad())
             .size_full()
             .bg(Theme::bg())
             .child(
                 div()
                     .flex()
                     .flex_col()
+                    .gap(Theme::sidebar_gap())
                     .flex_shrink_0()
-                    .w(px(446.))
+                    .w(Theme::sidebar_width())
                     .child(
                         div()
                             .flex()
@@ -70,7 +71,6 @@ impl Render for SkinView {
                             .bg(Theme::surface())
                             .rounded(Theme::radius_panel())
                             .p(px(10.))
-                            .mb(px(12.))
                             .child(
                                 div()
                                     .flex()

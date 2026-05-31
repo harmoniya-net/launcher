@@ -72,7 +72,6 @@ pub fn server_card(
             .absolute()
             .inset_0()
             .size_full()
-            .rounded(Theme::radius_card())
             .opacity(banner_opacity);
         card = card.child(banner_img);
         // Inner shadow from top and bottom: two gradient bands that fade dark

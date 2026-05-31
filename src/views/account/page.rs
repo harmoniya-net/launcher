@@ -35,16 +35,17 @@ impl Render for AccountView {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .flex()
-            .gap(px(16.))
-            .p(px(24.))
+            .gap(Theme::panel_gap())
+            .p(Theme::screen_pad())
             .size_full()
             .bg(Theme::bg())
             .child(
                 div()
                     .flex()
                     .flex_col()
+                    .gap(Theme::sidebar_gap())
                     .flex_shrink_0()
-                    .w(px(448.))
+                    .w(Theme::sidebar_width())
                     .h_full()
                     .child(div().flex_1().min_h(px(0.)).child(self.server_list.clone()))
                     .child(self.user_bar.clone()),

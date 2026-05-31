@@ -1,5 +1,6 @@
 use gpui::{
     AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Window, div, px,
+    relative,
 };
 
 use crate::state::AppState;
@@ -21,9 +22,11 @@ impl Placeholder {
 
 impl Render for Placeholder {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        // 40% of the skin pane so the form (and its inputs) take ~60% —
+        // matching the launcher settings tab.
         div()
+            .w(relative(0.4))
             .flex_shrink_0()
-            .w(px(320.))
             .h_full()
             .bg(Theme::surface())
             .flex()

@@ -1,5 +1,5 @@
 use gpui::{
-    AnyView, AppContext, Context, Entity, Font, FontFallbacks, FontFeatures, FontStyle,
+    AnyView, AppContext, Context, Entity, Font, FontFeatures, FontStyle,
     FontWeight, IntoElement, ParentElement, Render, Styled, Window, div,
     prelude::FluentBuilder,
 };
@@ -93,18 +93,12 @@ impl Render for Root {
         let view = self.current.clone();
         let modal = self.state.read(cx).active_modal;
 
-        // Roboto doesn't ship emoji glyphs, so list common system emoji fonts
-        // as fallbacks. Whichever is installed handles emoji codepoints.
+        // Only the bundled Inter is used — no system-font fallbacks. (Emoji are
+        // rendered as Twemoji images by the emoji/markdown widgets, not glyphs.)
         let font = Font {
             family: Theme::font(),
             features: FontFeatures::default(),
-            fallbacks: Some(FontFallbacks::from_fonts(vec![
-                "Apple Color Emoji".into(),
-                "Segoe UI Emoji".into(),
-                "Noto Color Emoji".into(),
-                "Noto Emoji".into(),
-                Theme::font_fallback().to_string(),
-            ])),
+            fallbacks: None,
             weight: FontWeight::NORMAL,
             style: FontStyle::Normal,
         };

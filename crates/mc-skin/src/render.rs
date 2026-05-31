@@ -15,12 +15,17 @@ pub const HEIGHT: u32 = 290;
 /// Logical pixels per 1 model unit. Decoupled from `HEIGHT` so the buffer can
 /// grow for rotation padding without zooming the character.
 const SCALE: f32 = 7.5;
-/// SSAA factor. We rasterize at `SS × WIDTH × SS × HEIGHT` and downsample with a
-/// coverage-only filter: interior pixels copy directly (texels stay crisp),
-/// silhouette pixels average their alpha (smooth outline). Higher = smoother
-/// silhouette but cost grows quadratically; the extra smoothness is mostly
-/// supplied cheaply by `smooth_alpha` below.
-const SS: u32 = 2;
+/// SSAA target, in samples per *logical* pixel along each axis. We rasterize at
+/// a coverage-only supersampled buffer and downsample blending just the alpha
+/// (interior texels copy directly so they stay crisp; silhouette pixels average
+/// their coverage for a smooth outline). The per-axis sample count is derived
+/// from this and the display scale (`ss ≈ OVERSAMPLE / scale`), so total quality
+/// stays constant across displays while cost is bounded. Higher = smoother but
+/// cost grows quadratically.
+const OVERSAMPLE: f32 = 2.0;
+/// Master switch for silhouette anti-aliasing (supersample + alpha feather).
+/// Off → a crisp, hard-edged render at the display's native resolution.
+const ANTIALIAS: bool = true;
 
 /// Arm width model. "Slim" (Alex) arms are 3px wide; "Classic" (Steve) 4px.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -231,29 +236,36 @@ fn part_triangles(p: &Part, tex_scale: f32) -> Vec<Tri> {
     // to face corners, which compresses the edge texels to half the screen
     // area of the interior texels.
     const E: f32 = 0.001;
-    let mut face =
-        |p0: Vec3, p1: Vec3, p2: Vec3, p3: Vec3, u0: f32, v0: f32, u1: f32, v1: f32, v_flip: bool| {
-            let (lo_u, hi_u) = (u0.min(u1) + E, u0.max(u1) - E);
-            let (lo_v, hi_v) = (v0.min(v1) + E, v0.max(v1) - E);
-            // p0=BL of face, p1=BR, p2=TR, p3=TL.
-            // Normal case: BL of face ↔ BL of texture region.
-            // V-flipped: BL of face ↔ TL of texture region (bottom face per MC).
-            let (uv0, uv1, uv2, uv3) = if v_flip {
-                ((lo_u, lo_v), (hi_u, lo_v), (hi_u, hi_v), (lo_u, hi_v))
-            } else {
-                ((lo_u, hi_v), (hi_u, hi_v), (hi_u, lo_v), (lo_u, lo_v))
-            };
-            out.push(Tri([
-                Vertex { pos: p0, uv: uv0 },
-                Vertex { pos: p1, uv: uv1 },
-                Vertex { pos: p2, uv: uv2 },
-            ]));
-            out.push(Tri([
-                Vertex { pos: p0, uv: uv0 },
-                Vertex { pos: p2, uv: uv2 },
-                Vertex { pos: p3, uv: uv3 },
-            ]));
+    let mut face = |p0: Vec3,
+                    p1: Vec3,
+                    p2: Vec3,
+                    p3: Vec3,
+                    u0: f32,
+                    v0: f32,
+                    u1: f32,
+                    v1: f32,
+                    v_flip: bool| {
+        let (lo_u, hi_u) = (u0.min(u1) + E, u0.max(u1) - E);
+        let (lo_v, hi_v) = (v0.min(v1) + E, v0.max(v1) - E);
+        // p0=BL of face, p1=BR, p2=TR, p3=TL.
+        // Normal case: BL of face ↔ BL of texture region.
+        // V-flipped: BL of face ↔ TL of texture region (bottom face per MC).
+        let (uv0, uv1, uv2, uv3) = if v_flip {
+            ((lo_u, lo_v), (hi_u, lo_v), (hi_u, hi_v), (lo_u, hi_v))
+        } else {
+            ((lo_u, hi_v), (hi_u, hi_v), (hi_u, lo_v), (lo_u, lo_v))
         };
+        out.push(Tri([
+            Vertex { pos: p0, uv: uv0 },
+            Vertex { pos: p1, uv: uv1 },
+            Vertex { pos: p2, uv: uv2 },
+        ]));
+        out.push(Tri([
+            Vertex { pos: p0, uv: uv0 },
+            Vertex { pos: p2, uv: uv2 },
+            Vertex { pos: p3, uv: uv3 },
+        ]));
+    };
 
     // FRONT (+Z local)
     face(
@@ -334,9 +346,11 @@ fn cape_part(t: f32) -> Part {
     }
 }
 
-/// Rasterize the character to an `RgbaImage` of [`WIDTH`]×[`HEIGHT`]. `t` is the
-/// idle-animation clock in seconds; `yaw`/`pitch` are the view rotation in
-/// radians.
+/// Rasterize the character to an `RgbaImage`. `t` is the idle-animation clock in
+/// seconds; `yaw`/`pitch` are the view rotation in radians. `scale` is the
+/// display's device-pixel ratio: output is [`WIDTH`]×[`HEIGHT`] *times* `scale`,
+/// so the viewer can paint it 1:1 (no upscaling → no chunky pixels on HiDPI).
+/// Pass `1.0` for logical-size output.
 pub fn rasterize(
     skin: &RgbaImage,
     cape: Option<&RgbaImage>,
@@ -344,24 +358,37 @@ pub fn rasterize(
     yaw: f32,
     pitch: f32,
     t: f32,
+    scale: f32,
 ) -> RgbaImage {
-    let bw = WIDTH * SS;
-    let bh = HEIGHT * SS;
+    let scale = scale.clamp(1.0, 3.0);
+    let out_w = (WIDTH as f32 * scale).round().max(1.0) as u32;
+    let out_h = (HEIGHT as f32 * scale).round().max(1.0) as u32;
+    // Supersample for a smooth silhouette (when enabled), aiming for ~OVERSAMPLE×
+    // the logical resolution; the output is already at device pixels so fewer
+    // extra samples are needed as `scale` grows. With AA off, 1 sample = crisp.
+    let ss: u32 = if ANTIALIAS {
+        (OVERSAMPLE / scale).round().max(1.0) as u32
+    } else {
+        1
+    };
+
+    let bw = out_w * ss;
+    let bh = out_h * ss;
     let mut buf = RgbaImage::from_pixel(bw, bh, Rgba([0, 0, 0, 0]));
     let mut depth = vec![f32::INFINITY; (bw * bh) as usize];
 
     let (ys, yc) = yaw.sin_cos();
     let (ps, pc) = pitch.sin_cos();
 
-    let scale = SCALE * SS as f32;
+    let render_scale = SCALE * scale * ss as f32;
     let cx = bw as f32 * 0.5;
     let cy = bh as f32 * 0.5;
     let project = |p: Vec3| -> (f32, f32, f32) {
         let q = Vec3::new(p.x, p.y - 16.0, p.z);
         let q = rotate_y(q, ys, yc);
         let q = rotate_x(q, ps, pc);
-        let sx = cx + q.x * scale;
-        let sy = cy - q.y * scale;
+        let sx = cx + q.x * render_scale;
+        let sy = cy - q.y * render_scale;
         // Camera looks toward -Z; larger model z = closer. Negate so depth
         // ordering is "smaller = closer" for a simple `<` test.
         (sx, sy, -q.z)
@@ -430,8 +457,10 @@ pub fn rasterize(
         rasterize(&cape_part(t), cape_tex);
     }
 
-    let mut out = downsample_aa(&buf);
-    smooth_alpha(&mut out);
+    let mut out = downsample_aa(&buf, out_w, out_h, ss);
+    if ANTIALIAS {
+        smooth_alpha(&mut out);
+    }
     out
 }
 
@@ -461,20 +490,21 @@ fn smooth_alpha(buf: &mut RgbaImage) {
     }
 }
 
-/// Box-downsample from `SS×` resolution to native, but only blend the alpha
-/// channel. Colour is taken from one source pixel so internal texel boundaries
-/// stay crisp; only the silhouette gets anti-aliased.
-fn downsample_aa(src: &RgbaImage) -> RgbaImage {
-    let mut out = RgbaImage::from_pixel(WIDTH, HEIGHT, Rgba([0, 0, 0, 0]));
-    let n = SS * SS;
-    for y in 0..HEIGHT {
-        for x in 0..WIDTH {
+/// Box-downsample from `ss×` resolution to `out_w`×`out_h`, but only blend the
+/// alpha channel. Colour is taken from one source pixel so internal texel
+/// boundaries stay crisp; only the silhouette gets anti-aliased. With `ss == 1`
+/// this is a straight copy.
+fn downsample_aa(src: &RgbaImage, out_w: u32, out_h: u32, ss: u32) -> RgbaImage {
+    let mut out = RgbaImage::from_pixel(out_w, out_h, Rgba([0, 0, 0, 0]));
+    let n = (ss * ss).max(1);
+    for y in 0..out_h {
+        for x in 0..out_w {
             let mut alpha_sum = 0u32;
             let mut color = [0u8; 3];
             let mut found = false;
-            for dy in 0..SS {
-                for dx in 0..SS {
-                    let p = src.get_pixel(x * SS + dx, y * SS + dy);
+            for dy in 0..ss {
+                for dx in 0..ss {
+                    let p = src.get_pixel(x * ss + dx, y * ss + dy);
                     alpha_sum += p[3] as u32;
                     if !found && p[3] > 0 {
                         color = [p[0], p[1], p[2]];

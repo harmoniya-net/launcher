@@ -161,13 +161,14 @@ impl Render for Hero {
                     .object_fit(ObjectFit::Cover)
                     .absolute()
                     .inset_0()
-                    .size_full()
-                    .rounded(Theme::radius_panel()),
+                    .size_full(),
             );
         }
         // Dark fade rising from the bottom so the title + toolbar stay legible.
+        // No rounding: it sits over the (square) banner and would otherwise show
+        // a rounded dark corner where the banner is sharp.
         hero = hero.child(
-            div().absolute().inset_0().rounded(Theme::radius_panel()).bg(linear_gradient(
+            div().absolute().inset_0().bg(linear_gradient(
                 180.,
                 linear_color_stop(hsla(0., 0., 0., 0.0), 0.05),
                 linear_color_stop(hsla(0., 0., 0., 0.85), 1.0),

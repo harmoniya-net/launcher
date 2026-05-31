@@ -54,19 +54,36 @@ impl Theme {
     }
 
     pub fn radius_panel() -> Pixels {
-        px(6.)
+        px(12.)
     }
     pub fn radius_card() -> Pixels {
-        px(3.)
+        px(8.)
     }
     pub fn radius_block() -> Pixels {
-        px(3.)
+        px(6.)
     }
 
-    pub fn font() -> SharedString {
-        "Roboto".into()
+    // ── Layout — shared so every screen lines up to the same grid ──
+    /// Outer padding of a full screen (account, skin, launcher).
+    pub fn screen_pad() -> Pixels {
+        px(24.)
     }
-    pub fn font_fallback() -> SharedString {
-        "Noto Sans".into()
+    /// Gap between the sidebar column and the main panel.
+    pub fn panel_gap() -> Pixels {
+        px(16.)
+    }
+    /// Width of the left sidebar column (nav/list + profile).
+    pub fn sidebar_width() -> Pixels {
+        px(448.)
+    }
+    /// Gap between the sidebar's top section and the profile card below it.
+    pub fn sidebar_gap() -> Pixels {
+        px(12.)
+    }
+
+    /// The one bundled UI family. Google's static Inter carries the optical size
+    /// in the family name, so the 18pt set (right for UI text) is "Inter 18pt".
+    pub fn font() -> SharedString {
+        "Inter 18pt".into()
     }
 }

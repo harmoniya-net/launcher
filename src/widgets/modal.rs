@@ -61,6 +61,10 @@ impl Modal {
             .justify_center()
             .p(px(32.))
             .bg(Theme::overlay())
+            // `occlude` makes the backdrop absorb all mouse input so nothing
+            // behind the modal is interactive. A backdrop click dismisses the
+            // modal; the card stops propagation so clicks inside it don't close.
+            .occlude()
             .on_mouse_down(MouseButton::Left, move |_, _, cx| {
                 if let Some(cb) = on_close_for_overlay.as_ref() { cb(cx); }
             })

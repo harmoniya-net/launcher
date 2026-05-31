@@ -96,6 +96,9 @@ pub struct SkinViewer {
     /// Last animation `t` we rendered for. Used to invalidate the cache when
     /// the animation has advanced enough to matter.
     last_t: f32,
+    /// Device pixel ratio of the last render; re-render if the window moves to a
+    /// display with a different scale so the output stays crisp.
+    last_scale: f32,
 }
 
 impl SkinViewer {
@@ -146,6 +149,7 @@ impl SkinViewer {
             rendered: None,
             start: Instant::now(),
             last_t: 0.0,
+            last_scale: 1.0,
         };
         Self::load_source(initial_skin, true, cx);
         Self::load_source(initial_cape, false, cx);
@@ -223,10 +227,11 @@ impl SkinViewer {
         }
     }
 
-    fn ensure_render(&mut self, t: f32, cx: &mut Context<Self>) -> Option<Arc<RenderImage>> {
+    fn ensure_render(&mut self, t: f32, scale: f32, cx: &mut Context<Self>) -> Option<Arc<RenderImage>> {
         // Invalidate cache when the idle animation has advanced enough that a
-        // re-render visibly changes anything (~30 fps quantum).
-        if (t - self.last_t).abs() >= 1.0 / 30.0 {
+        // re-render visibly changes anything (~30 fps quantum), or when the
+        // display's scale factor changed (output resolution must follow it).
+        if (t - self.last_t).abs() >= 1.0 / 30.0 || scale != self.last_scale {
             self.rendered = None;
         }
         if let Some(r) = &self.rendered {
@@ -234,7 +239,7 @@ impl SkinViewer {
         }
         let skin = self.skin.as_ref()?;
         let model = render_model(self.state.read(cx).current_skin_model());
-        let mut buf = mc_skin::rasterize(skin, self.cape.as_ref(), model, self.yaw, self.pitch, t);
+        let mut buf = mc_skin::rasterize(skin, self.cape.as_ref(), model, self.yaw, self.pitch, t, scale);
         // RenderImage stores BGRA; our rasterizer produced RGBA so swap R↔B.
         for px in buf.chunks_exact_mut(4) {
             px.swap(0, 2);
@@ -242,6 +247,7 @@ impl SkinViewer {
         let arc = Arc::new(RenderImage::new(vec![Frame::new(buf)]));
         self.rendered = Some(arc.clone());
         self.last_t = t;
+        self.last_scale = scale;
         Some(arc)
     }
 }
@@ -249,7 +255,10 @@ impl SkinViewer {
 impl Render for SkinViewer {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = self.start.elapsed().as_secs_f32();
-        let rendered = self.ensure_render(t, cx);
+        // Render at the display's device-pixel ratio so the image paints 1:1
+        // (no nearest-neighbour upscaling → no chunky pixels on HiDPI).
+        let scale = window.scale_factor();
+        let rendered = self.ensure_render(t, scale, cx);
         // Drive the idle animation: schedule another paint at the next vsync.
         window.request_animation_frame();
 

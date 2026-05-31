@@ -45,15 +45,16 @@ fn main() {
             // Plug reqwest into GPUI so img(url) loads remote textures.
             cx.set_http_client(Arc::new(gpui_http::GpuiHttpClient::new()));
 
-            // Bundle Roboto so the UI looks the same on machines without it installed.
+            // Bundle Inter — the only font family the UI uses, so it renders
+            // identically everywhere without depending on installed system fonts.
             let fonts: Vec<Cow<'static, [u8]>> = vec![
-                Cow::Borrowed(include_bytes!("../assets/fonts/Roboto-Regular.ttf")),
-                Cow::Borrowed(include_bytes!("../assets/fonts/Roboto-Medium.ttf")),
-                Cow::Borrowed(include_bytes!("../assets/fonts/Roboto-Bold.ttf")),
-                Cow::Borrowed(include_bytes!("../assets/fonts/Roboto-Italic.ttf")),
+                Cow::Borrowed(include_bytes!("../assets/fonts/Inter-Regular.ttf")),
+                Cow::Borrowed(include_bytes!("../assets/fonts/Inter-Medium.ttf")),
+                Cow::Borrowed(include_bytes!("../assets/fonts/Inter-SemiBold.ttf")),
+                Cow::Borrowed(include_bytes!("../assets/fonts/Inter-Bold.ttf")),
             ];
             if let Err(e) = cx.text_system().add_fonts(fonts) {
-                tracing::warn!("failed to load bundled Roboto fonts: {e}");
+                tracing::warn!("failed to load bundled Inter fonts: {e}");
             }
 
             let state = AppState::boot(cx);
