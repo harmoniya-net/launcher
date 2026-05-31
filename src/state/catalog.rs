@@ -106,6 +106,15 @@ impl AppState {
     /// Set (or clear, with `None`) a leaf option's value.
     pub fn set_option_value(&mut self, modpack_id: String, name: String, value: Option<String>, cx: &mut Context<Self>) {
         let entry = self.settings.modpack_options.entry(modpack_id).or_default();
+        // Skip redundant writes: a slider drag calls this on every mouse-move,
+        // but the stepped value only crosses a boundary occasionally.
+        let changed = match &value {
+            Some(v) => entry.vars.get(&name) != Some(v),
+            None => entry.vars.contains_key(&name),
+        };
+        if !changed {
+            return;
+        }
         match value {
             Some(v) => { entry.vars.insert(name, v); }
             None => { entry.vars.remove(&name); }

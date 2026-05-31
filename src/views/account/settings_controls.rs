@@ -2,8 +2,8 @@
 //! path, step button, field card). Extracted from `settings_modal.rs`.
 
 use gpui::{
-    Entity, FontWeight, InteractiveElement, IntoElement, MouseButton, ParentElement, SharedString,
-    Styled, div, px, relative,
+    div, px, Entity, FontWeight, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, SharedString, Styled,
 };
 
 use harmoniya_api::services::options::{self, Choice, ModpackOptions};
@@ -27,62 +27,6 @@ pub(crate) fn header_text(title: &str, subtitle: Option<&str>) -> gpui::Div {
 pub(crate) fn field_card(title: &str, subtitle: Option<&str>, enabled: bool, control: gpui::AnyElement) -> gpui::AnyElement {
     let card = div().flex().flex_col().gap(px(8.)).child(header_text(title, subtitle)).child(control);
     if enabled { card.into_any_element() } else { card.opacity(0.4).into_any_element() }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn slider_control(
-    handle: &Entity<AppState>,
-    modpack_id: &str,
-    name: &str,
-    min: f64,
-    max: f64,
-    step: f64,
-    default: f64,
-    unit: Option<&str>,
-    saved: &ModpackOptions,
-    enabled: bool,
-) -> gpui::AnyElement {
-    let cur = saved.vars.get(name).and_then(|s| s.parse::<f64>().ok()).unwrap_or(default);
-    let frac = if max > min { ((cur - min) / (max - min)).clamp(0., 1.) as f32 } else { 0. };
-    let unit_suffix = unit.map(|u| format!(" {u}")).unwrap_or_default();
-    let sign = |n: f64| {
-        div()
-            .text_size(px(11.))
-            .text_color(Theme::text_faint())
-            .child(format!("{}{}", options::fmt_num(n), unit_suffix))
-    };
-
-    let track_col = div()
-        .flex_1()
-        .flex()
-        .flex_col()
-        .gap(px(5.))
-        .child(
-            div()
-                .h(px(8.))
-                .rounded_full()
-                .bg(Theme::surface_raised())
-                .overflow_hidden()
-                .child(div().h_full().w(relative(frac)).bg(Theme::accent()).rounded_full()),
-        )
-        .child(div().flex().justify_between().child(sign(min)).child(sign(max)));
-
-    div()
-        .flex()
-        .items_center()
-        .gap(px(10.))
-        .child(step_btn(handle, modpack_id, name, "minus", "−", (cur - step).max(min), enabled))
-        .child(track_col)
-        .child(step_btn(handle, modpack_id, name, "plus", "+", (cur + step).min(max), enabled))
-        .child(
-            div()
-                .w(px(72.))
-                .text_size(px(13.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(Theme::text())
-                .child(format!("{}{}", options::fmt_num(cur), unit_suffix)),
-        )
-        .into_any_element()
 }
 
 pub(crate) fn step_btn(
