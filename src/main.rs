@@ -33,7 +33,8 @@ fn main() {
     // lifetime; dropping/exiting releases the OS lock.
     let _instance = match single_instance::acquire() {
         single_instance::Instance::AlreadyRunning => {
-            tracing::info!("another instance is already running; exiting");
+            tracing::info!("another instance is already running; focusing it and exiting");
+            single_instance::signal_focus();
             return;
         }
         single_instance::Instance::Primary(guard) => guard,
@@ -115,6 +116,9 @@ fn main() {
             // System tray: toggle/restore the window (it hides on close or launch), or quit.
             start_tray(handle, cx);
 
+            // Bring this window to the front when a duplicate launch pokes us.
+            start_focus_listener(handle, cx);
+
             // Backstop: if the app quits some other way than tray Quit, at least
             // SIGTERM the game (the ~100ms quit budget rules out a full graceful wait).
             cx.on_app_quit(|_cx| {
@@ -144,6 +148,19 @@ fn start_tray(window: gpui::AnyWindowHandle, cx: &mut App) {
                 }
                 TrayCmd::Quit => graceful_quit().await,
             }
+        }
+    })
+    .detach();
+}
+
+/// Listen for "focus me" pokes from duplicate launches and raise the window.
+fn start_focus_listener(window: gpui::AnyWindowHandle, cx: &mut App) {
+    let Some(mut rx) = single_instance::serve_focus() else { return };
+    cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+        while rx.next().await.is_some() {
+            let _ = cx.update_window(window, |_, window, app| {
+                crate::shell::window_ctl::show(window, app)
+            });
         }
     })
     .detach();

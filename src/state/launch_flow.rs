@@ -28,6 +28,17 @@ impl AppState {
         });
     }
 
+    /// Bring the main window to the foreground and focus it — e.g. after the
+    /// browser OAuth flow completes, so the user lands back on the launcher
+    /// instead of the (auto-closing) success tab.
+    pub fn focus_window(&self, cx: &mut Context<Self>) {
+        let Some(MainWindow(handle)) = cx.try_global::<MainWindow>() else { return };
+        let handle = *handle;
+        cx.defer(move |cx| {
+            let _ = handle.update(cx, |_, window, app| crate::shell::window_ctl::show(window, app));
+        });
+    }
+
     /// Open the launch modal and start installing/launching the selected modpack.
     pub fn play(&mut self, cx: &mut Context<Self>) {
         self.open_modal(ActiveModal::Launch, cx);

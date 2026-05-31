@@ -22,6 +22,8 @@
 <body>
 <h1>Успішно!</h1>
 <p>Можна закрити це вікно.</p>
-<script>setTimeout(() => window.close(), 600);</script>
+<!-- Linger briefly so the launcher can pull itself back to the foreground
+     (it refocuses on login success) before this tab disappears. -->
+<script>setTimeout(() => window.close(), 1000);</script>
 </body>
 </html>

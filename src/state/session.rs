@@ -45,6 +45,9 @@ impl AppState {
                         state.login_phase = LoginPhase::Idle;
                         state.set_route(Route::Account, cx);
                         cx.emit(AppEvent::AuthChanged);
+                        // The browser stole focus during OAuth; pull the launcher
+                        // back to the front (the success tab closes shortly after).
+                        state.focus_window(cx);
                     }
                     Err(e) => {
                         state.login_phase = LoginPhase::Error(e.to_string());
