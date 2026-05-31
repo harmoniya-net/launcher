@@ -65,11 +65,31 @@ pub async fn fetch_profile(access_token: &str) -> Result<Option<SkinProfile>> {
     let uuid = claims.get("uuid").and_then(|v| v.as_str()).ok_or_else(|| anyhow!("no uuid in claims"))?;
     let clean = uuid.replace('-', "");
 
-    let resp = http::client()
-        .get(format!("{YGGDRASIL_BASE}/session/minecraft/profile/{clean}"))
+    let profile_url = format!("{YGGDRASIL_BASE}/session/minecraft/profile/{clean}");
+    let mut resp = http::client()
+        .get(&profile_url)
         .send()
         .await
         .map_err(|e| anyhow!("profile: {e}"))?;
+
+    // Bifrost upserts the profile from the JWT on any *authed* request, but this
+    // read isn't authed. On a brand-new account's first login the profile isn't
+    // cached yet, so bifrost 204s and the skin viewer would be blank. Warm up
+    // with one authed call to register the player — bifrost then serves the
+    // default skin for the (now skin-less) profile — and retry the read once.
+    if resp.status() == reqwest::StatusCode::NO_CONTENT {
+        let _ = http::client()
+            .get(format!("{YGGDRASIL_BASE}/privileges"))
+            .bearer_auth(&ygg_token)
+            .send()
+            .await;
+        resp = http::client()
+            .get(&profile_url)
+            .send()
+            .await
+            .map_err(|e| anyhow!("profile: {e}"))?;
+    }
+
     if resp.status() == reqwest::StatusCode::NO_CONTENT {
         return Ok(None);
     }
