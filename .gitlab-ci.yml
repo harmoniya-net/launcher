@@ -3,10 +3,10 @@
 # Cut a release by pushing a tag, e.g.:
 #     git tag v0.3.1 && git push origin v0.3.1
 # That builds Linux + Windows binaries and publishes them to GitLab Releases.
-# The launcher self-updater (src/update.rs, GitLab backend) downloads the asset
-# whose name contains the running target triple — so the asset NAMES below must
-# stay stable, and the tag must match `version` in Cargo.toml (self_update
-# compares them as semver, ignoring a leading `v`).
+# The launcher self-updater (src/shell/update.rs, GitLab backend) downloads
+# the asset whose name contains the running target triple — so the .tar.gz asset
+# NAMES below must stay stable, and the tag must match `version` in Cargo.toml
+# (self_update compares them as semver, ignoring a leading `v`).
 #
 # Linux builds on the default Linux shared runners. Windows MUST build on a
 # native Windows runner: gpui's build.rs compiles HLSL shaders with fxc.exe and
@@ -24,6 +24,11 @@ variables:
   PKG_BASE: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/launcher/${CI_COMMIT_TAG}"
   LINUX_ASSET: "harmoniya-launcher-x86_64-unknown-linux-gnu.tar.gz"
   WINDOWS_ASSET: "harmoniya-launcher-x86_64-pc-windows-msvc.tar.gz"
+  # Raw (un-archived) binaries for direct download. Names deliberately omit the
+  # target triple so the self-updater (which matches assets containing the
+  # triple) only ever picks the .tar.gz archives, never these.
+  LINUX_BIN: "harmoniya-launcher-linux"
+  WINDOWS_BIN: "harmoniya-launcher-windows.exe"
 
 default:
   image: rust:1.90-bookworm
@@ -67,8 +72,9 @@ build:linux:
     - install -D target/x86_64-unknown-linux-gnu/release/harmoniya-launcher dist/harmoniya-launcher
     - tar -C dist -czf "$LINUX_ASSET" harmoniya-launcher
     - 'curl --fail --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "$LINUX_ASSET" "$PKG_BASE/$LINUX_ASSET"'
+    - 'curl --fail --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file dist/harmoniya-launcher "$PKG_BASE/$LINUX_BIN"'
   artifacts:
-    paths: ["$LINUX_ASSET"]
+    paths: ["$LINUX_ASSET", "dist/harmoniya-launcher"]
     expire_in: 1 week
 
 # --- Windows release binary (native MSVC build on a Windows runner) ---------
@@ -99,8 +105,9 @@ build:windows:
     - Copy-Item 'target\release\harmoniya-launcher.exe' 'dist\harmoniya-launcher.exe'
     - tar -C dist -czf "$env:WINDOWS_ASSET" harmoniya-launcher.exe
     - 'curl.exe --fail --header "JOB-TOKEN: $env:CI_JOB_TOKEN" --upload-file "$env:WINDOWS_ASSET" "$env:PKG_BASE/$env:WINDOWS_ASSET"'
+    - 'curl.exe --fail --header "JOB-TOKEN: $env:CI_JOB_TOKEN" --upload-file dist\harmoniya-launcher.exe "$env:PKG_BASE/$env:WINDOWS_BIN"'
   artifacts:
-    paths: ["$WINDOWS_ASSET"]
+    paths: ["$WINDOWS_ASSET", "dist/harmoniya-launcher.exe"]
     expire_in: 1 week
 
 # --- publish a GitLab Release linking the uploaded assets -------------------
@@ -124,3 +131,7 @@ release:
           url: "$PKG_BASE/$LINUX_ASSET"
         - name: "$WINDOWS_ASSET"
           url: "$PKG_BASE/$WINDOWS_ASSET"
+        - name: "$LINUX_BIN"
+          url: "$PKG_BASE/$LINUX_BIN"
+        - name: "$WINDOWS_BIN"
+          url: "$PKG_BASE/$WINDOWS_BIN"
