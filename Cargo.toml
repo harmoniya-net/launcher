@@ -1,6 +1,6 @@
 [package]
 name = "harmoniya-launcher"
-version = "0.3.5"
+version = "0.3.6"
 edition = "2021"
 publish = false
 
@@ -50,7 +50,7 @@ tiny_http = "0.12"
 open = "5"
 sha2 = "0.10"
 rand = "0.8"
-opys-runtime = "0.1.10"
+opys-runtime = "0.1.11"
 libc = "0.2"
 
 [dependencies]
