@@ -26,6 +26,7 @@ pub(crate) enum PlayState {
     Offline,
     Maintenance,
     Unauthenticated,
+    NoPermission,
 }
 
 /// The rounded button fill; stretches to fill the button.
@@ -138,7 +139,7 @@ pub(crate) fn play_button(
         let color = match play_state {
             PlayState::Maintenance => Theme::status_maintenance(),
             PlayState::Offline => Theme::status_offline(),
-            _ => Theme::text_faint(),
+            PlayState::NoPermission | PlayState::Unauthenticated | PlayState::Online => Theme::text_faint(),
         };
         div()
             .relative()

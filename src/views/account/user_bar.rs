@@ -4,7 +4,6 @@ use gpui::{
 };
 use crate::widgets::icon::icon;
 
-use harmoniya_api::services::group::lookup;
 use crate::state::{AppState, Route, SkinTab};
 use crate::theme::Theme;
 
@@ -23,7 +22,9 @@ impl Render for UserBar {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let state = self.state.read(cx);
         let user = state.user.clone();
-        let group = state.selected_modpack().and_then(|m| lookup(&m.title));
+        let rank = state.selected_modpack().and_then(|m| {
+            state.lucky_profile.as_ref()?.rank_for(&m.title.to_lowercase())
+        });
         let head = state
             .skin_profile
             .as_ref()
@@ -87,13 +88,13 @@ impl Render for UserBar {
                                     .text_color(Theme::text())
                                     .child(user.as_ref().map(|u| u.username.clone()).unwrap_or_default()),
                             );
-                        if let Some(g) = group {
+                        if let Some((prefix, color)) = rank {
                             info = info.child(
                                 div()
                                     .text_size(px(12.))
                                     .font_weight(FontWeight::MEDIUM)
-                                    .text_color(rgb(g.color))
-                                    .child(g.name.to_string()),
+                                    .text_color(rgb(color.unwrap_or(0xAAAAAA)))
+                                    .child(prefix.to_string()),
                             );
                         }
                         info

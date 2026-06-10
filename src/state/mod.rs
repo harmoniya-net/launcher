@@ -18,6 +18,7 @@ use harmoniya_api::auth::{self, tokens::Tokens};
 use harmoniya_api::config;
 use harmoniya_api::services::{
     account::User,
+    lucky::LuckyProfile,
     modpacks::{Modpack, ProjectGroup},
     options::ModpackOptions,
     yggdrasil::{SkinModel, SkinProfile},
@@ -26,6 +27,7 @@ use harmoniya_launch::pipeline::{CancellationToken, LaunchState};
 
 mod catalog;
 mod launch_flow;
+mod lucky;
 mod session;
 mod skin;
 mod ui;
@@ -112,6 +114,7 @@ pub struct AppState {
     pub favourites: HashSet<String>,
     pub settings: Settings,
     pub login_phase: LoginPhase,
+    pub lucky_profile: Option<LuckyProfile>,
     pub skin_profile: Option<SkinProfile>,
     /// Locally overridden skin model for live preview in the viewer; cleared
     /// after the next successful skin upload sync.
@@ -141,6 +144,10 @@ pub struct AppState {
     pub banner_cache: HashMap<String, Arc<Image>>,
     /// Pre-rendered Minecraft head texture keyed by source skin URL.
     pub head_cache: HashMap<String, Arc<Image>>,
+    /// Pre-fetched + Lanczos3-resized project logo textures keyed by URL.
+    /// GPUI's nearest-neighbour downscale makes the raw CDN images look pixelated
+    /// at 20 px; pre-scaling to 40×40 (2× for HiDPI) via the `image` crate fixes that.
+    pub logo_cache: HashMap<String, Arc<Image>>,
 }
 
 pub enum AppEvent {
@@ -184,6 +191,7 @@ impl AppState {
             favourites,
             settings,
             login_phase: LoginPhase::Idle,
+            lucky_profile: None,
             skin_profile: None,
             preview_skin_model: None,
             preview_skin_bytes: None,
@@ -198,6 +206,7 @@ impl AppState {
             news_modal_body: None,
             banner_cache: HashMap::new(),
             head_cache: HashMap::new(),
+            logo_cache: HashMap::new(),
         });
 
         cx.set_global(AppStateHandle(entity.clone()));

@@ -46,6 +46,16 @@ fn file_label(path: &str) -> String {
 }
 
 fn starting_view() -> gpui::AnyElement {
+    centered_message("Підготовка…")
+}
+
+/// Shown after the game process has started, while we linger before hiding the
+/// launcher to the tray (see `AppState::hide_after_launch`).
+fn launched_view() -> gpui::AnyElement {
+    centered_message("Гра запускається…")
+}
+
+fn centered_message(text: &'static str) -> gpui::AnyElement {
     div()
         .flex()
         .flex_1()
@@ -53,7 +63,7 @@ fn starting_view() -> gpui::AnyElement {
         .justify_center()
         .text_color(Theme::text_muted())
         .text_size(px(14.))
-        .child("Підготовка…")
+        .child(text)
         .into_any_element()
 }
 
@@ -258,7 +268,9 @@ impl Render for LaunchModal {
                     });
                 })
             }
-            // Starting, plus Idle/Done as a brief transition before the modal closes.
+            // The game has started; linger here briefly before hiding to tray.
+            LaunchState::Done { .. } => launched_view(),
+            // Starting / Idle: a brief transition while the modal opens.
             _ => starting_view(),
         };
 

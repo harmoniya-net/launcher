@@ -1,10 +1,11 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Instant;
 
 use gpui::{
-    AnyElement, Context, Entity, FontWeight, InteractiveElement, IntoElement, ObjectFit,
-    ParentElement, Render, StatefulInteractiveElement, StyledImage, Styled, Window, div, img, px,
-    prelude::FluentBuilder,
+    AnyElement, Context, Entity, FontWeight, Image, ImageSource, InteractiveElement, IntoElement,
+    ObjectFit, ParentElement, Render, StatefulInteractiveElement, StyledImage, Styled, Window,
+    div, img, px, prelude::FluentBuilder,
 };
 
 use harmoniya_api::services::modpacks::Modpack;
@@ -225,8 +226,10 @@ impl Render for ServerList {
         let groups = state.groups.clone();
         let modpacks = state.modpacks.clone();
         let favourites = state.favourites.clone();
+        let lucky = state.lucky_profile.clone();
         let loading = state.modpacks_loading;
         let error = state.modpacks_error.clone();
+        let logo_cache = state.logo_cache.clone();
         let state_handle = self.state.clone();
 
         let mut list = div()
@@ -244,19 +247,30 @@ impl Render for ServerList {
         } else if groups.is_empty() {
             list = list.child(empty("Поки що немає модпаків"));
         } else {
+            let can_view = |m: &Modpack| {
+                lucky.as_ref().map_or(false, |p| p.can_view_modpack(&m.title.to_lowercase()))
+            };
             // Favourites group first — pinned modpacks moved out of their projects.
-            let favs: Vec<Modpack> =
-                modpacks.iter().filter(|m| favourites.contains(&m.id)).cloned().collect();
+            let favs: Vec<Modpack> = modpacks
+                .iter()
+                .filter(|m| favourites.contains(&m.id) && can_view(m))
+                .cloned()
+                .collect();
             if !favs.is_empty() {
                 list = list.child(self.render_group(fav_header(), favs, &selected, &state_handle, cx));
             }
             for group in groups {
-                let remaining: Vec<Modpack> =
-                    group.modpacks.into_iter().filter(|m| !favourites.contains(&m.id)).collect();
+                let remaining: Vec<Modpack> = group
+                    .modpacks
+                    .into_iter()
+                    .filter(|m| !favourites.contains(&m.id) && can_view(m))
+                    .collect();
                 if remaining.is_empty() {
                     continue;
                 }
-                let header = project_header(group.project.logo.url.clone(), group.project.title.clone());
+                let logo = group.project.logo.url.as_deref()
+                    .and_then(|u| logo_cache.get(u).cloned());
+                let header = project_header(logo, group.project.title.clone());
                 list = list.child(self.render_group(header, remaining, &selected, &state_handle, cx));
             }
         }
@@ -266,20 +280,21 @@ impl Render for ServerList {
 }
 
 /// A project group's label: logo + uppercase project name.
-fn project_header(logo_url: Option<String>, title: String) -> AnyElement {
+fn project_header(logo: Option<Arc<Image>>, title: String) -> AnyElement {
     div()
         .flex()
         .items_center()
         .gap(px(8.))
         .py(px(4.))
         .opacity(0.6)
-        .when_some(logo_url, |this, url| {
+        .when_some(logo, |this, arc| {
+            let source: ImageSource = arc.into();
             this.child(
-                img(url)
+                img(source)
                     .w(px(20.))
                     .h(px(20.))
                     .rounded_full()
-                    .object_fit(ObjectFit::Cover)
+                    .object_fit(ObjectFit::Fill)
                     .flex_shrink_0(),
             )
         })

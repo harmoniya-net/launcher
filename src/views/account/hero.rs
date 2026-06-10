@@ -48,12 +48,18 @@ impl Render for Hero {
             return div().into_any_element();
         };
         let authed = state.tokens.is_some();
+        let server = modpack.title.to_lowercase();
+        let lucky = state.lucky_profile.as_ref();
+        let can_play = lucky.map_or(false, |p| p.can_play_modpack(&server));
+        let can_bypass = lucky.map_or(false, |p| p.can_bypass_maintenance(&server));
         let play_state = if !authed {
             PlayState::Unauthenticated
-        } else if modpack.maintaining {
+        } else if modpack.maintaining && !can_bypass {
             PlayState::Maintenance
         } else if modpack.status.is_none() {
             PlayState::Offline
+        } else if !can_play {
+            PlayState::NoPermission
         } else {
             PlayState::Online
         };
@@ -62,6 +68,7 @@ impl Render for Hero {
             PlayState::Maintenance => "Тех. роботи",
             PlayState::Offline => "Сервер офлайн",
             PlayState::Unauthenticated => "Увійдіть",
+            PlayState::NoPermission => "Немає доступу",
             PlayState::Online => "Грати",
         };
 

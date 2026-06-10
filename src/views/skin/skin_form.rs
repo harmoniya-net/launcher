@@ -47,6 +47,11 @@ impl Render for SkinForm {
         let model = self.current_model(cx);
         let saving = self.editor.saving;
         let status = self.editor.status.clone();
+        let lucky = self.state.read(cx).lucky_profile.clone();
+        let can_skin = lucky.as_ref().map_or(true, |p| p.can_upload_skin());
+        let can_skin_hd = lucky.as_ref().map_or(true, |p| p.can_upload_skin_hd());
+        let can_cape = lucky.as_ref().map_or(true, |p| p.can_upload_cape());
+        let can_cape_hd = lucky.as_ref().map_or(true, |p| p.can_upload_cape_hd());
 
         let skin_name = self.editor.pending_skin.as_ref().map(|(_, n)| n.clone()).unwrap_or_else(|| NO_FILE.into());
         let cape_name = self.editor.pending_cape.as_ref().map(|(_, n)| n.clone()).unwrap_or_else(|| NO_FILE.into());
@@ -85,12 +90,26 @@ impl Render for SkinForm {
                     .flex()
                     .flex_col()
                     .gap(px(20.))
-                    .child(file_field("ФАЙЛ СКІНУ", skin_name, move |_, _, cx| {
+                    .child(file_field("ФАЙЛ СКІНУ", skin_name, !saving && can_skin, move |_, _, cx| {
                         if let Some(path) = pick_png() {
                             let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                            let max = if can_skin_hd { 2048 } else { 64 };
+                            if let Ok((w, h)) = image::image_dimensions(&path) {
+                                if w > max || h > max {
+                                    pick_skin.update(cx, |this, cx| {
+                                        this.editor.status = Some((
+                                            format!("Максимальний розмір скіну: {max}×{max}px"),
+                                            Some(false),
+                                        ));
+                                        cx.notify();
+                                    });
+                                    return;
+                                }
+                            }
                             let bytes = std::fs::read(&path).ok().map(std::sync::Arc::new);
                             pick_skin.update(cx, |this, cx| {
                                 this.editor.pending_skin = Some((path, name));
+                                this.editor.status = None;
                                 if let Some(b) = bytes {
                                     this.state.update(cx, |s, cx| s.set_preview_skin_bytes(Some(b), cx));
                                 }
@@ -98,7 +117,7 @@ impl Render for SkinForm {
                             });
                         }
                     }))
-                    .child(model_field(model, {
+                    .child(model_field(model, !saving && can_skin, {
                         let h = model_classic;
                         move |_, _, cx| {
                             h.update(cx, |this, cx| {
@@ -117,12 +136,26 @@ impl Render for SkinForm {
                             });
                         }
                     }))
-                    .child(file_field("ПЛАЩ", cape_name, move |_, _, cx| {
+                    .child(file_field("ПЛАЩ", cape_name, !saving && can_cape, move |_, _, cx| {
                         if let Some(path) = pick_png() {
                             let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                            let max = if can_cape_hd { 2048 } else { 64 };
+                            if let Ok((w, h)) = image::image_dimensions(&path) {
+                                if w > max || h > max {
+                                    pick_cape.update(cx, |this, cx| {
+                                        this.editor.status = Some((
+                                            format!("Максимальний розмір плаща: {max}×{max}px"),
+                                            Some(false),
+                                        ));
+                                        cx.notify();
+                                    });
+                                    return;
+                                }
+                            }
                             let bytes = std::fs::read(&path).ok().map(std::sync::Arc::new);
                             pick_cape.update(cx, |this, cx| {
                                 this.editor.pending_cape = Some((path, name));
+                                this.editor.status = None;
                                 if let Some(b) = bytes {
                                     this.state.update(cx, |s, cx| s.set_preview_cape_bytes(Some(b), cx));
                                 }
@@ -164,12 +197,12 @@ impl Render for SkinForm {
                     .flex()
                     .gap(px(18.))
                     .child(
-                        reset_link("Скинути скін", !saving && profile_skin.is_some(), move |_, _, cx| {
+                        reset_link("Скинути скін", !saving && can_skin && profile_skin.is_some(), move |_, _, cx| {
                             reset_skin_handle.update(cx, |this, cx| this.reset(Kind::Skin, cx));
                         }),
                     )
                     .child(
-                        reset_link("Скинути плащ", !saving && profile_cape.is_some(), move |_, _, cx| {
+                        reset_link("Скинути плащ", !saving && can_cape && profile_cape.is_some(), move |_, _, cx| {
                             reset_cape_handle.update(cx, |this, cx| this.reset(Kind::Cape, cx));
                         }),
                     ),
@@ -177,6 +210,7 @@ impl Render for SkinForm {
     }
 }
 
+#[derive(Clone, Copy)]
 enum Kind { Skin, Cape }
 
 impl SkinForm {
@@ -247,8 +281,24 @@ impl SkinForm {
                 match res {
                     Ok(tokens) => {
                         this.editor.status = Some(("Скинуто".into(), Some(true)));
+                        match kind {
+                            Kind::Skin => {
+                                this.editor.pending_skin = None;
+                                this.editor.user_model = None;
+                            }
+                            Kind::Cape => {
+                                this.editor.pending_cape = None;
+                            }
+                        }
                         this.state.update(cx, |s, cx| {
                             s.adopt_tokens(Some(tokens));
+                            match kind {
+                                Kind::Skin => {
+                                    s.set_preview_skin_bytes(None, cx);
+                                    s.preview_skin_model = None;
+                                }
+                                Kind::Cape => s.set_preview_cape_bytes(None, cx),
+                            }
                             s.fetch_skin_profile(cx);
                         });
                     }

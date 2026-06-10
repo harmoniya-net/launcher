@@ -83,6 +83,21 @@ impl SettingsModal {
         }
     }
 
+    /// Whether a schema field is hidden by the player's permissions. A
+    /// `Feature` requires `harmoniya.launcher.feature.{name}`; hidden by default
+    /// until the lucky profile loads (so features don't flash in then vanish).
+    fn field_hidden(&self, field: &Field, cx: &Context<Self>) -> bool {
+        match field {
+            Field::Feature { name, .. } => self
+                .state
+                .read(cx)
+                .lucky_profile
+                .as_ref()
+                .is_none_or(|p| !p.can_view_feature(name)),
+            _ => false,
+        }
+    }
+
     /// One schema field. `enabled` is false for children under a disabled feature.
     fn field_view(
         &self,
@@ -163,6 +178,9 @@ impl SettingsModal {
 
         let mut col = div().flex().flex_col().gap(px(12.)).child(header);
         for child in options {
+            if self.field_hidden(child, cx) {
+                continue;
+            }
             col = col.child(
                 div().pl(px(12.)).child(self.field_view(modpack_id, child, saved, on, window, cx)),
             );
@@ -484,6 +502,9 @@ impl Render for SettingsModal {
             );
         }
         for field in &schema {
+            if self.field_hidden(field, cx) {
+                continue;
+            }
             col = col.child(self.field_view(&m.id, field, &saved, true, window, cx));
         }
 

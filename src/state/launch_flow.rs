@@ -1,6 +1,8 @@
 //! The play → install → launch flow, plus hiding the window to the tray once a
 //! game starts.
 
+use std::time::Duration;
+
 use futures::StreamExt;
 use gpui::{AppContext, Context};
 use harmoniya_api::services::options;
@@ -140,13 +142,35 @@ impl AppState {
             LaunchMsg::Done { pid } => {
                 tracing::info!("game launched (pid {pid})");
                 self.launch_state = LaunchState::Done { pid };
-                // Match the web: a successful launch closes the modal.
-                self.active_modal = None;
+                // Keep the modal up on its "launching" view for now (don't close
+                // yet) — the game window takes a few seconds to spin up, and
+                // hiding instantly would drop the user onto a blank desktop.
                 cx.notify();
-                // Hide the launcher out of the way now the game is starting.
-                self.hide_window(cx);
+                self.hide_after_launch(cx);
                 true
             }
         }
+    }
+
+    /// Linger on the post-launch "launching" view for a beat, then close the
+    /// launch modal and hide the launcher to the tray. Detached and guarded:
+    /// if the user dismissed the modal or kicked off another launch in the
+    /// meantime, it quietly no-ops.
+    fn hide_after_launch(&self, cx: &mut Context<Self>) {
+        const LINGER: Duration = Duration::from_secs(5);
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(LINGER).await;
+            let _ = this.update(cx, |state, cx| {
+                if !matches!(state.launch_state, LaunchState::Done { .. }) {
+                    return;
+                }
+                if state.active_modal == Some(ActiveModal::Launch) {
+                    state.active_modal = None;
+                }
+                state.hide_window(cx);
+                cx.notify();
+            });
+        })
+        .detach();
     }
 }

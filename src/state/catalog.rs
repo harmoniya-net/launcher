@@ -92,6 +92,8 @@ impl AppState {
                         state.groups = group(&items);
                         state.modpacks = items;
                         state.prefetch_banners(cx);
+                        state.prefetch_logos(cx);
+                        state.fetch_lucky_profile(cx);
                         cx.emit(AppEvent::ModpacksLoaded);
                         cx.notify();
                     }
@@ -141,6 +143,42 @@ impl AppState {
                 let mut added = false;
                 for r in results.into_iter().flatten() {
                     state.banner_cache.insert(r.0, r.1);
+                    added = true;
+                }
+                if added { cx.notify(); }
+            }).ok();
+        }).detach();
+    }
+
+    /// Fetch each project's logo, resize it to 40×40 with Lanczos3 (2× the 20 px
+    /// display size for HiDPI), and cache the result. GPUI's built-in downscale
+    /// is nearest-neighbour and looks pixelated at this size; pre-scaling here
+    /// fixes that at the cost of a one-time CPU pass per logo.
+    pub fn prefetch_logos(&mut self, cx: &mut Context<Self>) {
+        let urls: Vec<String> = self
+            .groups
+            .iter()
+            .filter_map(|g| g.project.logo.url.clone())
+            .filter(|u| !self.logo_cache.contains_key(u))
+            .collect();
+        if urls.is_empty() { return; }
+
+        cx.spawn(async move |this, cx| {
+            let fetches = urls.into_iter().map(|url| async move {
+                let bytes = fetch_image_bytes(&url).await.ok()?;
+                let img = image::load_from_memory(&bytes).ok()?;
+                let resized = img.resize_exact(40, 40, image::imageops::FilterType::Lanczos3);
+                let mut png: Vec<u8> = Vec::new();
+                resized
+                    .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+                    .ok()?;
+                Some((url, Arc::new(Image::from_bytes(gpui::ImageFormat::Png, png))))
+            });
+            let results = harmoniya_api::http::on_tokio(futures::future::join_all(fetches)).await;
+            this.update(cx, |state, cx| {
+                let mut added = false;
+                for r in results.into_iter().flatten() {
+                    state.logo_cache.insert(r.0, r.1);
                     added = true;
                 }
                 if added { cx.notify(); }

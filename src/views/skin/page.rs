@@ -1,7 +1,7 @@
 use crate::widgets::icon::icon;
 use gpui::{
-    div, px, AppContext, Context, Entity, FontWeight, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, Render, SharedString, Styled, Window,
+    div, px, relative, AppContext, Context, Entity, FontWeight, InteractiveElement, IntoElement,
+    MouseButton, ParentElement, Render, SharedString, Styled, Window,
 };
 
 use crate::state::{AppState, Route, SkinTab};
@@ -140,13 +140,18 @@ impl Render for SkinView {
                             .child(self.skin_form.clone())
                             .child(self.placeholder.clone())
                             .into_any_element(),
-                        SkinTab::Launcher => {
-                            crate::views::skin::launcher_settings::launcher_settings(
+                        SkinTab::Launcher => div()
+                            .flex()
+                            .size_full()
+                            .child(crate::views::skin::launcher_settings::launcher_settings(
                                 &self.state,
                                 data_dir.clone(),
                                 close_to_tray,
-                            )
-                        }
+                            ))
+                            // 40% spacer mirrors the skin preview pane so the
+                            // settings inputs land at the same width as skin inputs.
+                            .child(div().w(relative(0.3)).flex_shrink_0())
+                            .into_any_element(),
                     }),
             )
     }

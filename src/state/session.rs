@@ -63,6 +63,7 @@ impl AppState {
         auth::storage::clear();
         self.tokens = None;
         self.user = None;
+        self.lucky_profile = None;
         self.skin_profile = None;
         self.head_cache.clear();
         self.set_route(Route::Login, cx);

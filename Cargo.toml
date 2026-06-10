@@ -1,6 +1,6 @@
 [package]
 name = "harmoniya-launcher"
-version = "0.3.6"
+version = "0.3.7"
 edition = "2021"
 publish = false
 
@@ -95,11 +95,13 @@ resvg = "0.47.0"
 # self-update downloads stay small. Slower to compile — use `--profile fast`
 # locally (below) when iterating.
 [profile.release]
-opt-level = "s"     # optimize for size (use "z" for the smallest, at some speed cost)
-lto = "thin"        # cross-crate inlining/dead-code elimination; "fat" is smaller but much slower to build
+opt-level = "z"     # smallest code ("s" is slightly bigger but keeps loop vectorization)
+lto = "fat"         # whole-program inlining/dead-code elimination; smaller than "thin", slower build
 codegen-units = 1   # better optimization & smaller output (no parallel-chunk overhead)
 strip = true        # drop symbols + debuginfo
 debug = false
+panic = "abort"     # no unwinding: drops .gcc_except_table + most .eh_frame + landing pads.
+                    # Safe here — gpui only uses catch_unwind in its test harness, not at runtime.
 
 # Local "see the real experience, fast" build: release-grade runtime speed
 # (opt-level 3) but quick to compile. Run with `cargo run --profile fast`.
@@ -110,6 +112,8 @@ lto = false
 codegen-units = 256
 strip = false
 incremental = true
+# linker = "clang"
+# rustflags = ["-C", "link-arg=-fuse-ld=/path/to/mold"]
 
 # Tray: ksni (StatusNotifierItem over D-Bus) on Linux — no GTK loop, unlike
 # tray-icon's Linux backend, so it doesn't fight GPUI's own Linux event loop.

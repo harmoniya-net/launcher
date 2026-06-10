@@ -32,12 +32,34 @@ pub(crate) fn truncate_start(s: &str, max_chars: usize) -> String {
 pub(crate) fn file_field(
     label: &'static str,
     name: String,
+    enabled: bool,
     on_pick: impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
 ) -> gpui::AnyElement {
+    let mut btn = div()
+        .id(SharedString::from(format!("pick-{label}")))
+        .flex_shrink_0()
+        .px(px(16.))
+        .h_full()
+        .flex()
+        .items_center()
+        .bg(Theme::surface_raised())
+        .text_size(px(13.))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(Theme::text())
+        .child("Вибрати");
+    if enabled {
+        btn = btn
+            .cursor_pointer()
+            .hover(|s| s.bg(Theme::surface_hover()))
+            .on_mouse_down(MouseButton::Left, on_pick);
+    } else {
+        btn = btn.opacity(0.35);
+    }
     div()
         .flex()
         .flex_col()
         .gap(px(8.))
+        .opacity(if enabled { 1.0 } else { 0.5 })
         .child(
             div()
                 .text_size(px(11.))
@@ -53,23 +75,7 @@ pub(crate) fn file_field(
                 .bg(Theme::bg())
                 .rounded(Theme::radius_block())
                 .overflow_hidden()
-                .child(
-                    div()
-                        .id(SharedString::from(format!("pick-{label}")))
-                        .flex_shrink_0()
-                        .px(px(16.))
-                        .h_full()
-                        .flex()
-                        .items_center()
-                        .bg(Theme::surface_raised())
-                        .text_size(px(13.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(Theme::text())
-                        .cursor_pointer()
-                        .hover(|s| s.bg(Theme::surface_hover()))
-                        .on_mouse_down(MouseButton::Left, on_pick)
-                        .child("Вибрати"),
-                )
+                .child(btn)
                 .child(
                     div()
                         .flex_1()
@@ -85,6 +91,7 @@ pub(crate) fn file_field(
 
 pub(crate) fn model_field(
     model: SkinModel,
+    enabled: bool,
     on_classic: impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
     on_slim: impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
 ) -> gpui::AnyElement {
@@ -99,12 +106,13 @@ pub(crate) fn model_field(
                 .text_color(Theme::text_faint())
                 .child("МОДЕЛЬ РУК"),
         )
+        .opacity(if enabled { 1.0 } else { 0.5 })
         .child(
             div()
                 .flex()
                 .gap(px(24.))
-                .child(radio("звичайна", model == SkinModel::Classic, on_classic))
-                .child(radio("тонка", model == SkinModel::Slim, on_slim)),
+                .child(radio("звичайна", model == SkinModel::Classic, if enabled { Some(on_classic) } else { None }))
+                .child(radio("тонка", model == SkinModel::Slim, if enabled { Some(on_slim) } else { None })),
         )
         .into_any_element()
 }
@@ -112,15 +120,17 @@ pub(crate) fn model_field(
 pub(crate) fn radio(
     label: &'static str,
     selected: bool,
-    on_click: impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
+    on_click: Option<impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static>,
 ) -> gpui::AnyElement {
-    div()
+    let mut el = div()
         .id(SharedString::from(format!("radio-{label}")))
         .flex()
         .items_center()
-        .gap(px(9.))
-        .cursor_pointer()
-        .on_mouse_down(MouseButton::Left, on_click)
+        .gap(px(9.));
+    if let Some(handler) = on_click {
+        el = el.cursor_pointer().on_mouse_down(MouseButton::Left, handler);
+    }
+    el
         .child(
             div()
                 .w(px(16.))
