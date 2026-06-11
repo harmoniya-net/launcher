@@ -84,7 +84,7 @@ build:linux:
 # tagged pipeline will validate it.
 build:windows:
   stage: build
-  timeout: 100
+  timeout: 2h
   rules:
     - if: $CI_COMMIT_TAG
   tags: [saas-windows-medium-amd64]
