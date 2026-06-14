@@ -41,25 +41,6 @@ impl Phase {
             Phase::Extract => (90., 100.),
         }
     }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Phase::Resolve => "Завантаження маніфесту…",
-            Phase::Download => "Завантаження файлів…",
-            Phase::Verify => "Перевірка цілісності…",
-            Phase::Extract => "Розпакування…",
-        }
-    }
-
-    /// Short label used in the error footer (`PHASE_LABELS` in `LaunchModal.vue`).
-    pub fn short_label(self) -> &'static str {
-        match self {
-            Phase::Resolve => "отримання маніфесту",
-            Phase::Download => "завантаження",
-            Phase::Verify => "перевірка цілісності",
-            Phase::Extract => "розпакування",
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -76,23 +57,14 @@ pub struct LaunchProgress {
     pub files: Vec<LaunchFile>,
 }
 
+/// Coarse error classification. Human-readable titles live in the app's
+/// localization catalog (`i18n`), keeping this crate language-neutral.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ErrorCode {
     Network,
     Integrity,
     Extract,
     Unknown,
-}
-
-impl ErrorCode {
-    pub fn label(self) -> &'static str {
-        match self {
-            ErrorCode::Network => "Помилка мережі",
-            ErrorCode::Integrity => "Файл пошкоджено",
-            ErrorCode::Extract => "Помилка розпакування",
-            ErrorCode::Unknown => "Невідома помилка",
-        }
-    }
 }
 
 #[derive(Clone, Debug)]

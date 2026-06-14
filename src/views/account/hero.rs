@@ -64,12 +64,13 @@ impl Render for Hero {
             PlayState::Online
         };
 
+        let t = crate::i18n::t();
         let label = match play_state {
-            PlayState::Maintenance => "Тех. роботи",
-            PlayState::Offline => "Сервер офлайн",
-            PlayState::Unauthenticated => "Увійдіть",
-            PlayState::NoPermission => "Немає доступу",
-            PlayState::Online => "Грати",
+            PlayState::Maintenance => t.play_maintenance,
+            PlayState::Offline => t.play_offline,
+            PlayState::Unauthenticated => t.play_sign_in,
+            PlayState::NoPermission => t.play_no_access,
+            PlayState::Online => t.play,
         };
 
         let banner_url = modpack
@@ -182,7 +183,7 @@ impl Render for Hero {
             )),
         );
 
-        hero.child(
+        hero = hero.child(
             div()
                 .absolute()
                 .inset_0()
@@ -190,7 +191,12 @@ impl Render for Hero {
                 .flex_col()
                 .justify_end()
                 .child(toolbar),
-        )
-        .into_any_element()
+        );
+
+        // Round the (square) Cover banner the same way the login hero does:
+        // bg-coloured concave masks over the corners. Added last so they sit on
+        // top of the banner, gradient, and toolbar.
+        hero.children(crate::widgets::corner_mask::corner_masks(Theme::radius_panel()))
+            .into_any_element()
     }
 }

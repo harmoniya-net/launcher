@@ -3,12 +3,15 @@ use std::borrow::Cow;
 use gpui::{AssetSource, Result, SharedString};
 use rust_embed::RustEmbed;
 
-/// The SVG icons under `assets/icons/`, embedded into the binary at build time.
-/// GPUI resolves `img()`/`svg()` paths like `icons/rocket.svg` through this, so
-/// dropping a new SVG into `assets/icons/` makes it available with no code change.
+/// Assets embedded into the binary at build time: the SVG icons under
+/// `assets/icons/` and the raster images under `assets/images/`. GPUI resolves
+/// `img()`/`svg()` paths like `icons/rocket.svg` or `images/hero.png` through
+/// this, so dropping a file into either folder makes it available with no code
+/// change.
 #[derive(RustEmbed)]
 #[folder = "assets/"]
 #[include = "icons/*"]
+#[include = "images/*"]
 struct Embedded;
 
 pub struct Assets;

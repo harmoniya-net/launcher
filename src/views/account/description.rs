@@ -33,7 +33,7 @@ impl Render for Description {
                         .text_size(px(32.))
                         .font_weight(FontWeight::BOLD)
                         .text_color(Theme::text())
-                        .child("Оберіть сервер"),
+                        .child(crate::i18n::t().select_server),
                 )
                 .into_any_element()
         };

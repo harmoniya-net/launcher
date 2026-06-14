@@ -84,7 +84,7 @@ pub(crate) fn play_button(
             .cursor_pointer()
             .hover(|s| s.opacity(0.9))
             .child(btn_fill(rgb(STOP_BG)))
-            .child(btn_content(Some("icons/power.svg"), "Зупинити", Theme::text()))
+            .child(btn_content(Some("icons/power.svg"), crate::i18n::t().stop, Theme::text()))
             .on_mouse_down(MouseButton::Left, on_click)
             .into_any_element()
     } else if !play_disabled {

@@ -55,7 +55,7 @@ impl AppState {
         let Some(tokens) = self.tokens.clone() else {
             self.launch_state = LaunchState::Error(launch::LaunchError {
                 code: launch::ErrorCode::Unknown,
-                message: "Увійдіть в акаунт, щоб запустити гру.".into(),
+                message: crate::i18n::t().sign_in_to_play.into(),
                 phase: None,
                 paths: Vec::new(),
             });
@@ -66,7 +66,7 @@ impl AppState {
         if modpack.manifest_url.trim().is_empty() {
             self.launch_state = LaunchState::Error(launch::LaunchError {
                 code: launch::ErrorCode::Unknown,
-                message: "Для цього модпаку не налаштовано маніфест.".into(),
+                message: crate::i18n::t().no_manifest.into(),
                 phase: None,
                 paths: Vec::new(),
             });

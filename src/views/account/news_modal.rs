@@ -30,7 +30,7 @@ impl Render for NewsModal {
             .child(markdown::render(&body));
 
         Modal::new(content)
-            .title("Новина")
+            .title(crate::i18n::t().news_modal_title)
             .size(780., 640.)
             .on_close(move |cx| on_close(cx))
             .render()

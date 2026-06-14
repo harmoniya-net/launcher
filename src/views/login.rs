@@ -1,6 +1,6 @@
 use gpui::{
-    Context, Entity, FontWeight, Hsla, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    Render, Styled, Window, div, prelude::FluentBuilder, px, rgb,
+    Context, Entity, FontWeight, Hsla, InteractiveElement, IntoElement, MouseButton, ObjectFit,
+    ParentElement, Render, Styled, StyledImage, Window, div, img, prelude::FluentBuilder, px, rgb,
 };
 
 use harmoniya_api::auth::Provider;
@@ -28,6 +28,7 @@ impl Render for LoginView {
             LoginPhase::Error(msg) => Some(msg.clone()),
             _ => None,
         };
+        let t = crate::i18n::t();
 
         div()
             .flex()
@@ -63,7 +64,7 @@ impl Render for LoginView {
                                     .font_weight(FontWeight::BOLD)
                                     .text_color(Theme::text())
                                     .w_full()
-                                    .child("Вхід"),
+                                    .child(t.login_title),
                             )
                             .child(
                                 div()
@@ -71,7 +72,7 @@ impl Render for LoginView {
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(Theme::text_muted())
                                     .w_full()
-                                    .child("Увійти в акаунт"),
+                                    .child(t.login_subtitle),
                             )
                             .child(div().h(px(8.)))
                             .child(
@@ -81,7 +82,7 @@ impl Render for LoginView {
                                     .gap(px(6.))
                                     .w_full()
                                     .child(login_button(
-                                        "Увійти з Harmoniya",
+                                        t.login_harmoniya,
                                         "harmoniya-btn",
                                         "icons/harmoniya.svg",
                                         Theme::on_accent().into(),
@@ -92,7 +93,7 @@ impl Render for LoginView {
                                         },
                                     ))
                                     .child(login_button(
-                                        "Увійти з Discord",
+                                        t.login_discord,
                                         "discord-btn",
                                         "icons/discord.svg",
                                         Theme::on_accent().into(),
@@ -113,17 +114,37 @@ impl Render for LoginView {
                                                 .child(msg),
                                         )
                                     }),
+                            )
+                            // Quiet language toggle, so the UI language can be
+                            // picked before signing in (settings is post-login).
+                            // A hairline sets it apart as a footer control.
+                            .child(
+                                div()
+                                    .mt(px(20.))
+                                    .pt(px(16.))
+                                    .w_full()
+                                    .border_t_1()
+                                    .border_color(Theme::surface_raised())
+                                    .child(crate::widgets::lang_switch::language_toggle(&self.state)),
                             ),
                     ),
             )
             .child(
-                // Right hero panel (solid colour for now; the bundled hero PNG can be wired through gpui's image cache later)
+                // Right hero panel: a bundled Minecraft scene, Cover-fit so it never
+                // stretches at the window's (tiling-WM, arbitrary) aspect. gpui can't
+                // round a Cover image — it paints an oversized quad and the content
+                // mask is rectangle-only — so the four corners are masked by small
+                // bg-coloured concave overlays that turn the square corners round.
+                // The bg shows through until the image decodes on first paint.
                 div()
+                    .relative()
                     .flex_1()
                     .h_full()
                     .rounded(Theme::radius_panel())
                     .bg(rgb(0x16151a))
-                    .overflow_hidden(),
+                    .overflow_hidden()
+                    .child(img("images/hero.webp").size_full().object_fit(ObjectFit::Cover))
+                    .children(crate::widgets::corner_mask::corner_masks(Theme::radius_panel())),
             )
     }
 }

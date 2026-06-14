@@ -460,9 +460,9 @@ impl Render for SettingsModal {
                 .justify_center()
                 .size_full()
                 .text_color(Theme::text_faint())
-                .child("Оберіть модпак");
+                .child(crate::i18n::t().select_modpack);
             return Modal::new(body)
-                .title("Налаштування модпаку")
+                .title(crate::i18n::t().modpack_settings_title)
                 .size(720., 620.)
                 .on_close(move |cx| on_close(cx))
                 .render();
@@ -498,7 +498,7 @@ impl Render for SettingsModal {
             .on_mouse_down(MouseButton::Left, |_, window, _| window.blur());
         if schema.is_empty() {
             col = col.child(
-                div().text_size(px(13.)).text_color(Theme::text_faint()).child("Для цього модпаку немає налаштувань."),
+                div().text_size(px(13.)).text_color(Theme::text_faint()).child(crate::i18n::t().no_modpack_settings),
             );
         }
         for field in &schema {
@@ -544,7 +544,7 @@ impl Render for SettingsModal {
         }
 
         Modal::new(col)
-            .title("Налаштування модпаку")
+            .title(crate::i18n::t().modpack_settings_title)
             .size(720., 620.)
             .on_close(move |cx| on_close(cx))
             .render()

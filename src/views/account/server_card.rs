@@ -196,11 +196,12 @@ struct ResolvedStatus {
 }
 
 fn derive_status(m: &Modpack) -> ResolvedStatus {
+    let t = crate::i18n::t();
     if m.maintaining {
-        return ResolvedStatus { text: "Тех. Роботи".into(), color: Theme::status_maintenance() };
+        return ResolvedStatus { text: t.status_maintenance.into(), color: Theme::status_maintenance() };
     }
     match &m.status {
-        None => ResolvedStatus { text: "Офлайн".into(), color: Theme::status_offline() },
+        None => ResolvedStatus { text: t.status_offline.into(), color: Theme::status_offline() },
         Some(s) => ResolvedStatus { text: s.online.to_string(), color: Theme::status_online() },
     }
 }

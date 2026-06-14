@@ -64,6 +64,9 @@ pub struct Settings {
     /// Closing the window hides to the tray (default) instead of quitting.
     #[serde(default = "default_close_to_tray")]
     pub close_to_tray: bool,
+    /// UI language; Ukrainian unless the user switched to English.
+    #[serde(default)]
+    pub language: crate::i18n::Lang,
 }
 
 fn default_close_to_tray() -> bool {
@@ -76,6 +79,7 @@ impl Default for Settings {
             data_dir: None,
             modpack_options: HashMap::new(),
             close_to_tray: default_close_to_tray(),
+            language: crate::i18n::Lang::default(),
         }
     }
 }
@@ -175,6 +179,8 @@ impl AppState {
         let selection: Selection = config::load_json(config::SELECTION_FILE).unwrap_or_default();
         let favourites: HashSet<String> = config::load_json(config::FAVOURITES_FILE).unwrap_or_default();
         let settings: Settings = config::load_json(config::SETTINGS_FILE).unwrap_or_default();
+        // Activate the persisted language before any view (or the tray) renders.
+        crate::i18n::set(settings.language);
         let tokens = auth::storage::load();
 
         let entity = cx.new(|_| AppState {

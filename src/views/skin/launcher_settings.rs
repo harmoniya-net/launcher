@@ -1,4 +1,5 @@
-//! The Launcher-settings tab content: install directory + close-to-tray toggle.
+//! The Launcher-settings tab content: install directory, close-to-tray toggle,
+//! and the UI language switcher.
 //! Extracted from `skin/page.rs` (it isn't skin-specific — only shares the nav).
 //!
 //! Mirrors the skin form's layout (`skin_form.rs`) so the two tabs feel like one
@@ -12,6 +13,7 @@ use gpui::{
 
 use harmoniya_launch::pipeline as launch;
 
+use crate::i18n;
 use crate::state::AppState;
 use crate::theme::Theme;
 use crate::widgets::icon::icon;
@@ -20,7 +22,8 @@ use crate::widgets::toggle::toggle_switch;
 use super::skin_form_widgets::truncate_start;
 
 /// Launcher-wide settings (the Launcher tab): the install directory (`${root}`)
-/// where modpacks are downloaded, plus the close-to-tray behavior toggle.
+/// where modpacks are downloaded, the close-to-tray behavior toggle, and the
+/// UI language.
 pub(crate) fn launcher_settings(
     state: &Entity<AppState>,
     data_dir: Option<String>,
@@ -39,7 +42,7 @@ pub(crate) fn launcher_settings(
                 .text_size(px(28.))
                 .font_weight(FontWeight::BOLD)
                 .text_color(Theme::text())
-                .child("Лаунчер"),
+                .child(i18n::t().launcher),
         )
         .child(
             div()
@@ -47,12 +50,13 @@ pub(crate) fn launcher_settings(
                 .flex_col()
                 .gap(px(20.))
                 .child(install_dir_section(state, data_dir))
-                .child(close_to_tray_section(state, close_to_tray)),
+                .child(close_to_tray_section(state, close_to_tray))
+                .child(language_section(state)),
         )
         .into_any_element()
 }
 
-/// The "ТЕКА ВСТАНОВЛЕННЯ" field: where modpacks download to (`${root}`), with a
+/// The install-folder field: where modpacks download to (`${root}`), with a
 /// pick button, a reset-to-default control, the current path, and an open button.
 fn install_dir_section(state: &Entity<AppState>, data_dir: Option<String>) -> gpui::AnyElement {
     let is_default = data_dir.is_none();
@@ -61,16 +65,13 @@ fn install_dir_section(state: &Entity<AppState>, data_dir: Option<String>) -> gp
     let state_pick = state.clone();
     let state_reset = state.clone();
 
-    field(
-        "ТЕКА ВСТАНОВЛЕННЯ",
-        "Куди завантажуються та встановлюються файли модпаків.",
-    )
+    field(i18n::t().install_dir, i18n::t().install_dir_desc)
     .child(
         div()
             .flex()
             .items_center()
             .gap(px(8.))
-            // The picker bar: "Обрати" + optional reset + the current path.
+            // The picker bar: pick button + optional reset + the current path.
             .child(
                 div()
                     .flex_1()
@@ -104,7 +105,7 @@ fn install_dir_section(state: &Entity<AppState>, data_dir: Option<String>) -> gp
                                     state_pick.update(cx, |s, cx| s.set_data_dir(Some(path), cx));
                                 }
                             })
-                            .child("Обрати"),
+                            .child(i18n::t().pick),
                     )
                     // Reset-to-default sits just left of the path, shown only
                     // when a custom directory is set.
@@ -164,19 +165,23 @@ fn install_dir_section(state: &Entity<AppState>, data_dir: Option<String>) -> gp
     .into_any_element()
 }
 
-/// The "ХОВАТИ У ТРЕЙ" field: hide-to-tray vs quit on window close.
+/// The hide-to-tray field: hide-to-tray vs quit on window close.
 fn close_to_tray_section(state: &Entity<AppState>, on: bool) -> gpui::AnyElement {
     let state_toggle = state.clone();
     let switch = toggle_switch("close-to-tray", on, move |_, _, cx| {
         state_toggle.update(cx, |s, cx| s.set_close_to_tray(!on, cx));
     });
 
-    field(
-        "ХОВАТИ У ТРЕЙ",
-        "Замість закриття вікна лаунчер ховатиметься у трей.",
-    )
-    .child(switch)
-    .into_any_element()
+    field(i18n::t().hide_to_tray, i18n::t().hide_to_tray_desc)
+        .child(switch)
+        .into_any_element()
+}
+
+/// The UI-language field: the shared language switcher under a labeled field.
+fn language_section(state: &Entity<AppState>) -> gpui::AnyElement {
+    field(i18n::t().language, i18n::t().language_desc)
+        .child(crate::widgets::lang_switch::language_switcher(state))
+        .into_any_element()
 }
 
 /// A settings field shared by both sections: an uppercase label and a muted

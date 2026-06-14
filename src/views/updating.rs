@@ -15,9 +15,10 @@ const BAR_W: f32 = 280.;
 const SEG_W: f32 = 96.;
 
 pub(crate) fn updating_view(phase: &UpdatePhase) -> AnyElement {
+    let t = crate::i18n::t();
     let (title, subtitle) = match phase {
-        UpdatePhase::Downloading(version) => ("Оновлення", format!("Завантаження версії {version}…")),
-        UpdatePhase::Restarting => ("Готово", "Перезапуск…".to_string()),
+        UpdatePhase::Downloading(version) => (t.updating_title, crate::i18n::downloading_version(version)),
+        UpdatePhase::Restarting => (t.update_done, t.restarting.to_string()),
     };
 
     div()
