@@ -2846,7 +2846,7 @@ dependencies = [
 
 [[package]]
 name = "harmoniya-launcher"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "anyhow",
  "directories",
