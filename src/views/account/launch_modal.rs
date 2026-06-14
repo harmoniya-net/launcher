@@ -46,13 +46,13 @@ fn file_label(path: &str) -> String {
 }
 
 fn starting_view() -> gpui::AnyElement {
-    centered_message("Підготовка…")
+    centered_message(crate::i18n::t().preparing)
 }
 
 /// Shown after the game process has started, while we linger before hiding the
 /// launcher to the tray (see `AppState::hide_after_launch`).
 fn launched_view() -> gpui::AnyElement {
-    centered_message("Гра запускається…")
+    centered_message(crate::i18n::t().game_starting)
 }
 
 fn centered_message(text: &'static str) -> gpui::AnyElement {
@@ -76,7 +76,7 @@ fn progress_view(p: &LaunchProgress) -> gpui::AnyElement {
             div()
                 .text_size(px(14.))
                 .text_color(Theme::text())
-                .child(p.phase.label()),
+                .child(crate::i18n::t().phase_label(p.phase)),
         )
         .child(
             // Track
@@ -168,7 +168,7 @@ fn error_view(e: &LaunchError, retry: impl Fn(&mut App) + 'static) -> gpui::AnyE
     let code_line = {
         let mut s = format!("{:?}", e.code).to_uppercase();
         if let Some(phase) = e.phase {
-            s = format!("{s} · {}", phase.short_label());
+            s = format!("{s} · {}", crate::i18n::t().phase_short(phase));
         }
         s
     };
@@ -188,7 +188,7 @@ fn error_view(e: &LaunchError, retry: impl Fn(&mut App) + 'static) -> gpui::AnyE
                         .text_size(px(16.))
                         .font_weight(FontWeight::BOLD)
                         .text_color(Theme::status_offline())
-                        .child(e.code.label()),
+                        .child(crate::i18n::t().error_label(e.code)),
                 )
                 .child(
                     div()
@@ -219,7 +219,7 @@ fn error_view(e: &LaunchError, retry: impl Fn(&mut App) + 'static) -> gpui::AnyE
                 div()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(Theme::text())
-                    .child(format!("Файли ({})", e.paths.len())),
+                    .child(crate::i18n::files_count(e.paths.len())),
             );
         for p in e.paths.iter().take(50) {
             paths = paths.child(div().truncate().child(p.clone()));
@@ -244,7 +244,7 @@ fn error_view(e: &LaunchError, retry: impl Fn(&mut App) + 'static) -> gpui::AnyE
                     cx.stop_propagation();
                     retry(cx);
                 })
-                .child("Повторити"),
+                .child(crate::i18n::t().retry),
         ),
     );
 
@@ -254,7 +254,7 @@ fn error_view(e: &LaunchError, retry: impl Fn(&mut App) + 'static) -> gpui::AnyE
 impl Render for LaunchModal {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let state = self.state.read(cx);
-        let title = state.selected_modpack().map(|m| m.title.clone()).unwrap_or_else(|| "Запуск".into());
+        let title = state.selected_modpack().map(|m| m.title.clone()).unwrap_or_else(|| crate::i18n::t().launch_title.into());
         let on_close = self.on_close.clone();
 
         let inner = match &state.launch_state {

@@ -25,10 +25,11 @@ pub enum TrayCmd {
 
 /// Label for the show/hide toggle item, given current visibility.
 fn toggle_label(visible: bool) -> &'static str {
-    if visible { "Сховати" } else { "Показати" }
+    let t = crate::i18n::t();
+    if visible { t.tray_hide } else { t.tray_show }
 }
 
-/// Re-render the tray menu so the toggle label matches current visibility.
+/// Re-render the tray menu so the labels match current visibility and language.
 pub fn refresh() {
     #[cfg(target_os = "linux")]
     linux::refresh();
@@ -104,7 +105,7 @@ mod linux {
                 .into(),
                 MenuItem::Separator,
                 StandardItem {
-                    label: "Вийти".into(),
+                    label: crate::i18n::t().tray_quit.into(),
                     activate: Box::new(|t: &mut Self| t.send(TrayCmd::Quit)),
                     ..Default::default()
                 }
@@ -152,15 +153,16 @@ mod desktop {
 
     thread_local! {
         // TrayIcon is !Send and must outlive `spawn`; park it on the main thread.
-        // The toggle MenuItem is kept so `refresh` can relabel it.
+        // The toggle/quit MenuItems are kept so `refresh` can relabel them.
         static TRAY: RefCell<Option<TrayIcon>> = const { RefCell::new(None) };
         static TOGGLE: RefCell<Option<MenuItem>> = const { RefCell::new(None) };
+        static QUIT: RefCell<Option<MenuItem>> = const { RefCell::new(None) };
     }
 
     pub fn spawn(tx: UnboundedSender<TrayCmd>) {
         let menu = Menu::new();
         let toggle = MenuItem::new(toggle_label(crate::shell::window_ctl::is_visible()), true, None);
-        let quit = MenuItem::new("Вийти", true, None);
+        let quit = MenuItem::new(crate::i18n::t().tray_quit, true, None);
         if let Err(e) = menu
             .append(&toggle)
             .and_then(|_| menu.append(&PredefinedMenuItem::separator()))
@@ -189,6 +191,7 @@ mod desktop {
             Ok(t) => {
                 TRAY.with(|c| *c.borrow_mut() = Some(t));
                 TOGGLE.with(|c| *c.borrow_mut() = Some(toggle));
+                QUIT.with(|c| *c.borrow_mut() = Some(quit));
             }
             Err(e) => {
                 tracing::warn!("tray unavailable: {e}");
@@ -225,6 +228,11 @@ mod desktop {
         TOGGLE.with(|c| {
             if let Some(item) = c.borrow().as_ref() {
                 item.set_text(label);
+            }
+        });
+        QUIT.with(|c| {
+            if let Some(item) = c.borrow().as_ref() {
+                item.set_text(crate::i18n::t().tray_quit);
             }
         });
     }

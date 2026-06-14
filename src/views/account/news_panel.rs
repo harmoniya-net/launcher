@@ -38,7 +38,7 @@ impl Render for NewsPanel {
                 .py(px(24.))
                 .text_size(px(13.))
                 .text_color(Theme::text_faint())
-                .child("Поки що немає новин")
+                .child(crate::i18n::t().no_news)
                 .into_any_element()
         } else {
             div()
@@ -84,7 +84,7 @@ impl Render for NewsPanel {
                             .text_size(px(12.))
                             .font_weight(FontWeight::BOLD)
                             .text_color(Theme::text_faint())
-                            .child("НОВИНИ"),
+                            .child(crate::i18n::t().news_header),
                     ),
             )
             .child(body)
@@ -97,7 +97,7 @@ fn news_item(a: ModpackAnnouncement, state: &Entity<AppState>, idx: usize) -> gp
     // line based on the ~252px content width inside the 280px panel.
     let title = truncate(&title, 30);
     let excerpt = truncate(&excerpt, 34);
-    let date_label = relative_time_uk(&a.date);
+    let date_label = relative_time(&a.date);
     let body = a.body.clone();
     let state = state.clone();
     let id = SharedString::from(format!("news-{idx}"));
@@ -181,7 +181,9 @@ fn strip_md(s: &str) -> String {
         .to_string()
 }
 
-pub fn relative_time_uk(date_str: &str) -> String {
+/// Parse the announcement date and render it as a localized relative time
+/// (the formatting itself lives in `i18n::relative_time`).
+fn relative_time(date_str: &str) -> String {
     let now = OffsetDateTime::now_utc();
 
     let dt = if let Ok(dt) = OffsetDateTime::parse(date_str, &Rfc3339) {
@@ -197,32 +199,7 @@ pub fn relative_time_uk(date_str: &str) -> String {
 
     let diff = now - dt;
     let secs = diff.whole_seconds().max(0) as u64;
-
-    if secs < 60 {
-        return "щойно".into();
-    }
-    let mins = secs / 60;
-    if mins < 60 {
-        return format!("{} {} тому", mins, ua_unit(mins, "хвилину", "хвилини", "хвилин"));
-    }
-    let hours = mins / 60;
-    if hours < 24 {
-        return format!("{} {} тому", hours, ua_unit(hours, "годину", "години", "годин"));
-    }
-    let days = hours / 24;
-    if days < 7 {
-        return format!("{} {} тому", days, ua_unit(days, "день", "дні", "днів"));
-    }
-    let weeks = days / 7;
-    if weeks < 5 {
-        return format!("{} {} тому", weeks, ua_unit(weeks, "тиждень", "тижні", "тижнів"));
-    }
-    let months = days / 30;
-    if months < 12 {
-        return format!("{} {} тому", months, ua_unit(months, "місяць", "місяці", "місяців"));
-    }
-    let years = days / 365;
-    format!("{} {} тому", years, ua_unit(years, "рік", "роки", "років"))
+    crate::i18n::relative_time(secs)
 }
 
 fn parse_date_only(s: &str) -> Option<OffsetDateTime> {
@@ -244,10 +221,3 @@ fn parse_date_only(s: &str) -> Option<OffsetDateTime> {
     Some(date.midnight().assume_utc())
 }
 
-fn ua_unit<'a>(n: u64, one: &'a str, few: &'a str, many: &'a str) -> &'a str {
-    let n10 = n % 10;
-    let n100 = n % 100;
-    if n10 == 1 && n100 != 11 { one }
-    else if (2..=4).contains(&n10) && !(12..=14).contains(&n100) { few }
-    else { many }
-}

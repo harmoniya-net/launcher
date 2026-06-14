@@ -331,7 +331,7 @@ impl Render for SkinViewer {
             .text_size(px(11.))
             .font_weight(FontWeight::MEDIUM)
             .text_color(Theme::text_faint())
-            .child("Перетягни для обертання");
+            .child(crate::i18n::t().drag_to_rotate);
 
         // Always occupy the model's footprint — reserve the box before the first
         // frame renders so the label below doesn't jump when the image appears.

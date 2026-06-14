@@ -241,11 +241,11 @@ impl Render for ServerList {
             .overflow_y_scroll();
 
         if loading && groups.is_empty() {
-            list = list.child(empty("Завантаження…"));
+            list = list.child(empty(crate::i18n::t().loading));
         } else if let Some(err) = error {
-            list = list.child(empty(format!("Помилка: {err}")));
+            list = list.child(empty(crate::i18n::catalog_error(&err)));
         } else if groups.is_empty() {
-            list = list.child(empty("Поки що немає модпаків"));
+            list = list.child(empty(crate::i18n::t().no_modpacks));
         } else {
             let can_view = |m: &Modpack| {
                 lucky.as_ref().map_or(false, |p| p.can_view_modpack(&m.title.to_lowercase()))
@@ -308,7 +308,7 @@ fn project_header(logo: Option<Arc<Image>>, title: String) -> AnyElement {
         .into_any_element()
 }
 
-/// The Favourites group label: pin icon + "ОБРАНЕ".
+/// The Favourites group label: pin icon + localized "FAVOURITES".
 fn fav_header() -> AnyElement {
     div()
         .flex()
@@ -322,7 +322,7 @@ fn fav_header() -> AnyElement {
                 .text_size(px(12.))
                 .font_weight(FontWeight::BOLD)
                 .text_color(Theme::text_faint())
-                .child("ОБРАНЕ"),
+                .child(crate::i18n::t().favourites),
         )
         .into_any_element()
 }

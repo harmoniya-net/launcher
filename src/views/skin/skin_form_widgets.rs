@@ -46,7 +46,7 @@ pub(crate) fn file_field(
         .text_size(px(13.))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(Theme::text())
-        .child("Вибрати");
+        .child(crate::i18n::t().browse);
     if enabled {
         btn = btn
             .cursor_pointer()
@@ -104,15 +104,15 @@ pub(crate) fn model_field(
                 .text_size(px(11.))
                 .font_weight(FontWeight::BOLD)
                 .text_color(Theme::text_faint())
-                .child("МОДЕЛЬ РУК"),
+                .child(crate::i18n::t().arm_model),
         )
         .opacity(if enabled { 1.0 } else { 0.5 })
         .child(
             div()
                 .flex()
                 .gap(px(24.))
-                .child(radio("звичайна", model == SkinModel::Classic, if enabled { Some(on_classic) } else { None }))
-                .child(radio("тонка", model == SkinModel::Slim, if enabled { Some(on_slim) } else { None })),
+                .child(radio(crate::i18n::t().model_classic, model == SkinModel::Classic, if enabled { Some(on_classic) } else { None }))
+                .child(radio(crate::i18n::t().model_slim, model == SkinModel::Slim, if enabled { Some(on_slim) } else { None })),
         )
         .into_any_element()
 }

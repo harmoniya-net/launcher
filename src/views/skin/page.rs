@@ -49,6 +49,7 @@ impl Render for SkinView {
         let active_launcher = self.tab == SkinTab::Launcher;
         let data_dir = self.state.read(cx).settings.data_dir.clone();
         let close_to_tray = self.state.read(cx).settings.close_to_tray;
+        let t = crate::i18n::t();
 
         div()
             .flex()
@@ -79,7 +80,7 @@ impl Render for SkinView {
                                     .flex_1()
                                     .child(nav_item(
                                         Some("icons/arrow-left.svg"),
-                                        "Назад",
+                                        t.nav_back,
                                         false,
                                         move |_, _, cx| {
                                             state_back.update(cx, |s, cx| {
@@ -89,7 +90,7 @@ impl Render for SkinView {
                                     ))
                                     .child(nav_item(
                                         Some("icons/shirt.svg"),
-                                        "Скін",
+                                        t.skin,
                                         active_skin,
                                         move |_, _, cx| {
                                             state_skin.update(cx, |s, cx| {
@@ -99,7 +100,7 @@ impl Render for SkinView {
                                     ))
                                     .child(nav_item(
                                         Some("icons/rocket.svg"),
-                                        "Лаунчер",
+                                        t.launcher,
                                         active_launcher,
                                         move |_, _, cx| {
                                             state_launcher.update(cx, |s, cx| {
@@ -115,7 +116,7 @@ impl Render for SkinView {
                             )
                             .child(nav_item_styled(
                                 Some("icons/log-out.svg"),
-                                "Вийти",
+                                t.nav_logout,
                                 false,
                                 true,
                                 move |_, _, cx| {

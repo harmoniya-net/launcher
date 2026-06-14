@@ -13,8 +13,6 @@ use super::skin_form_widgets::{
     action_button, file_field, model_field, pick_png, reset_link,
 };
 
-const NO_FILE: &str = "файл не обрано";
-
 #[derive(Default, Clone)]
 struct EditorState {
     user_model: Option<SkinModel>,
@@ -53,8 +51,9 @@ impl Render for SkinForm {
         let can_cape = lucky.as_ref().map_or(true, |p| p.can_upload_cape());
         let can_cape_hd = lucky.as_ref().map_or(true, |p| p.can_upload_cape_hd());
 
-        let skin_name = self.editor.pending_skin.as_ref().map(|(_, n)| n.clone()).unwrap_or_else(|| NO_FILE.into());
-        let cape_name = self.editor.pending_cape.as_ref().map(|(_, n)| n.clone()).unwrap_or_else(|| NO_FILE.into());
+        let t = crate::i18n::t();
+        let skin_name = self.editor.pending_skin.as_ref().map(|(_, n)| n.clone()).unwrap_or_else(|| t.no_file.into());
+        let cape_name = self.editor.pending_cape.as_ref().map(|(_, n)| n.clone()).unwrap_or_else(|| t.no_file.into());
 
         let has_pending_skin = self.editor.pending_skin.is_some();
         let has_pending_cape = self.editor.pending_cape.is_some();
@@ -83,14 +82,14 @@ impl Render for SkinForm {
                     .text_size(px(28.))
                     .font_weight(FontWeight::BOLD)
                     .text_color(Theme::text())
-                    .child("Скін"),
+                    .child(t.skin),
             )
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .gap(px(20.))
-                    .child(file_field("ФАЙЛ СКІНУ", skin_name, !saving && can_skin, move |_, _, cx| {
+                    .child(file_field(t.skin_file, skin_name, !saving && can_skin, move |_, _, cx| {
                         if let Some(path) = pick_png() {
                             let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
                             let max = if can_skin_hd { 2048 } else { 64 };
@@ -98,7 +97,7 @@ impl Render for SkinForm {
                                 if w > max || h > max {
                                     pick_skin.update(cx, |this, cx| {
                                         this.editor.status = Some((
-                                            format!("Максимальний розмір скіну: {max}×{max}px"),
+                                            crate::i18n::max_skin_size(max),
                                             Some(false),
                                         ));
                                         cx.notify();
@@ -136,7 +135,7 @@ impl Render for SkinForm {
                             });
                         }
                     }))
-                    .child(file_field("ПЛАЩ", cape_name, !saving && can_cape, move |_, _, cx| {
+                    .child(file_field(t.cape_file, cape_name, !saving && can_cape, move |_, _, cx| {
                         if let Some(path) = pick_png() {
                             let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
                             let max = if can_cape_hd { 2048 } else { 64 };
@@ -144,7 +143,7 @@ impl Render for SkinForm {
                                 if w > max || h > max {
                                     pick_cape.update(cx, |this, cx| {
                                         this.editor.status = Some((
-                                            format!("Максимальний розмір плаща: {max}×{max}px"),
+                                            crate::i18n::max_cape_size(max),
                                             Some(false),
                                         ));
                                         cx.notify();
@@ -170,7 +169,7 @@ impl Render for SkinForm {
                     .items_center()
                     .gap(px(14.))
                     .child(
-                        action_button("Зберегти", !saving && has_changes, Theme::accent(), move |_, _, cx| {
+                        action_button(t.save, !saving && has_changes, Theme::accent(), move |_, _, cx| {
                             on_save.update(cx, |this, cx| this.save(cx));
                         }),
                     )
@@ -197,12 +196,12 @@ impl Render for SkinForm {
                     .flex()
                     .gap(px(18.))
                     .child(
-                        reset_link("Скинути скін", !saving && can_skin && profile_skin.is_some(), move |_, _, cx| {
+                        reset_link(t.reset_skin, !saving && can_skin && profile_skin.is_some(), move |_, _, cx| {
                             reset_skin_handle.update(cx, |this, cx| this.reset(Kind::Skin, cx));
                         }),
                     )
                     .child(
-                        reset_link("Скинути плащ", !saving && can_cape && profile_cape.is_some(), move |_, _, cx| {
+                        reset_link(t.reset_cape, !saving && can_cape && profile_cape.is_some(), move |_, _, cx| {
                             reset_cape_handle.update(cx, |this, cx| this.reset(Kind::Cape, cx));
                         }),
                     ),
@@ -222,7 +221,7 @@ impl SkinForm {
         let pending_cape = self.editor.pending_cape.clone();
 
         self.editor.saving = true;
-        self.editor.status = Some(("Збереження...".into(), None));
+        self.editor.status = Some((crate::i18n::t().saving.into(), None));
         cx.notify();
 
         cx.spawn(async move |this, cx| {
@@ -244,7 +243,7 @@ impl SkinForm {
                     Ok(tokens) => {
                         this.editor.pending_skin = None;
                         this.editor.pending_cape = None;
-                        this.editor.status = Some(("Збережено!".into(), Some(true)));
+                        this.editor.status = Some((crate::i18n::t().saved.into(), Some(true)));
                         this.state.update(cx, |s, cx| {
                             s.adopt_tokens(Some(tokens));
                             s.fetch_skin_profile(cx);
@@ -264,7 +263,7 @@ impl SkinForm {
         let Some(tokens) = self.state.read(cx).tokens.clone() else { return; };
 
         self.editor.saving = true;
-        self.editor.status = Some(("Скидання...".into(), None));
+        self.editor.status = Some((crate::i18n::t().resetting.into(), None));
         cx.notify();
 
         cx.spawn(async move |this, cx| {
@@ -280,7 +279,7 @@ impl SkinForm {
                 this.editor.saving = false;
                 match res {
                     Ok(tokens) => {
-                        this.editor.status = Some(("Скинуто".into(), Some(true)));
+                        this.editor.status = Some((crate::i18n::t().reset_done.into(), Some(true)));
                         match kind {
                             Kind::Skin => {
                                 this.editor.pending_skin = None;

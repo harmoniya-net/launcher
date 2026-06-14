@@ -125,7 +125,7 @@ pub(crate) fn path_control(
             .text_size(px(13.))
             .font_weight(FontWeight::SEMIBOLD)
             .text_color(Theme::text())
-            .child("Обрати");
+            .child(crate::i18n::t().pick);
         if enabled {
             let h = handle.clone();
             let mid = modpack_id.to_string();
@@ -161,7 +161,7 @@ pub(crate) fn path_control(
                 .px(px(14.))
                 .text_size(px(13.))
                 .text_color(Theme::text_faint())
-                .child(current.clone().unwrap_or_else(|| "не вибрано".into())),
+                .child(current.clone().unwrap_or_else(|| crate::i18n::t().not_set.into())),
         );
     if enabled && current.is_some() {
         let h = handle.clone();
@@ -182,7 +182,7 @@ pub(crate) fn path_control(
                 .on_mouse_down(MouseButton::Left, move |_, _, cx| {
                     h.update(cx, |s, cx| s.set_option_value(mid.clone(), nm.clone(), None, cx));
                 })
-                .child("Скинути"),
+                .child(crate::i18n::t().reset),
         );
     }
     row.into_any_element()

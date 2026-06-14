@@ -24,10 +24,22 @@ struct RawTokens {
     expires_in: Option<u64>,
 }
 
-/// Runs the full OAuth2 PKCE flow: opens browser, runs a one-shot loopback listener,
-/// exchanges code → tokens. The loopback listener is sync (`tiny_http`) and is
-/// dispatched onto a blocking thread so it does not stall the executor.
-pub async fn run_login_flow(provider: Provider) -> Result<Tokens> {
+/// An OAuth flow whose browser page has already been opened. Holds the loopback
+/// listener and PKCE state; await [`PendingLogin::finish`] for the redirect and
+/// token exchange. Split out from the open step so the UI can stop blocking the
+/// sign-in buttons as soon as the browser launches — the user can close the tab
+/// and retry instead of being stuck until the 5-minute callback timeout.
+pub struct PendingLogin {
+    listener: callback_server::CallbackListener,
+    verifier: String,
+    state: String,
+    redirect_uri: String,
+}
+
+/// Set up PKCE + the loopback listener and open the browser to the authorize
+/// URL. Returns as soon as the browser is launched (no blocking wait), so the
+/// caller can re-enable its UI; await [`PendingLogin::finish`] for the result.
+pub fn begin_login_flow(provider: Provider) -> Result<PendingLogin> {
     let pkce = pkce::generate();
     let state = pkce::random_state();
     let listener = callback_server::start()?;
@@ -51,14 +63,30 @@ pub async fn run_login_flow(provider: Provider) -> Result<Tokens> {
 
     open::that(url.as_str()).context("open browser")?;
 
-    let captured = std::thread::spawn(move || listener.wait_for_callback())
-        .join()
-        .map_err(|_| anyhow!("callback thread panicked"))??;
-    if captured.state != state {
-        return Err(anyhow!("oauth state mismatch"));
+    Ok(PendingLogin { listener, verifier: pkce.verifier, state, redirect_uri })
+}
+
+impl PendingLogin {
+    /// Block (≤5 min, on a blocking thread) for the loopback redirect, then
+    /// exchange the authorization code for tokens. Dropping the returned future
+    /// abandons the wait (the orphaned listener self-terminates at its timeout).
+    pub async fn finish(self) -> Result<Tokens> {
+        let PendingLogin { listener, verifier, state, redirect_uri } = self;
+        let captured = tokio::task::spawn_blocking(move || listener.wait_for_callback())
+            .await
+            .map_err(|_| anyhow!("callback thread panicked"))??;
+        if captured.state != state {
+            return Err(anyhow!("oauth state mismatch"));
+        }
+        let code = captured.code.ok_or_else(|| anyhow!("no code in callback"))?;
+        exchange_code(&code, &verifier, &redirect_uri).await
     }
-    let code = captured.code.ok_or_else(|| anyhow!("no code in callback"))?;
-    exchange_code(&code, &pkce.verifier, &redirect_uri).await
+}
+
+/// Full OAuth2 PKCE flow in one call (open browser, await callback, exchange).
+/// Equivalent to `begin_login_flow(provider)?.finish().await`.
+pub async fn run_login_flow(provider: Provider) -> Result<Tokens> {
+    begin_login_flow(provider)?.finish().await
 }
 
 pub enum Provider {

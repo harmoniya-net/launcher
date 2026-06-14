@@ -31,11 +31,36 @@ impl AppState {
     }
 
     pub fn login(&mut self, provider: auth::Provider, cx: &mut Context<Self>) {
+        // `Waiting` now covers only the brief browser-open step, so this guard
+        // just debounces a rapid double-click — it does NOT block for the whole
+        // auth. Once the page is open we drop back to `Idle` (below), so closing
+        // the tab and clicking again starts a fresh flow instead of hanging.
         if matches!(self.login_phase, LoginPhase::Waiting) { return; }
         self.login_phase = LoginPhase::Waiting;
         cx.notify();
         let handle = cx.spawn(async move |this, cx| {
-            let result = harmoniya_api::http::on_tokio(auth::run_login_flow(provider)).await;
+            // Step 1 — open the browser. Fast and non-blocking (no callback wait).
+            let pending = match auth::begin_login_flow(provider) {
+                Ok(p) => p,
+                Err(e) => {
+                    this.update(cx, |state, cx| {
+                        state.pending_login_task = None;
+                        state.login_phase = LoginPhase::Error(e.to_string());
+                        cx.notify();
+                    }).ok();
+                    return;
+                }
+            };
+            // Page is open — unblock the buttons immediately so the user can
+            // retry or switch provider if they close the tab.
+            if this.update(cx, |state, cx| {
+                state.login_phase = LoginPhase::Idle;
+                cx.notify();
+            }).is_err() {
+                return;
+            }
+            // Step 2 — await the redirect + token exchange in the background.
+            let result = harmoniya_api::http::on_tokio(pending.finish()).await;
             this.update(cx, |state, cx| {
                 state.pending_login_task = None;
                 match result {
@@ -50,8 +75,13 @@ impl AppState {
                         state.focus_window(cx);
                     }
                     Err(e) => {
-                        state.login_phase = LoginPhase::Error(e.to_string());
-                        cx.notify();
+                        // Only surface the failure if we're still signed out — a
+                        // newer attempt or a completed login shouldn't be clobbered
+                        // by a stale flow's timeout.
+                        if state.tokens.is_none() {
+                            state.login_phase = LoginPhase::Error(e.to_string());
+                            cx.notify();
+                        }
                     }
                 }
             }).ok();
