@@ -132,12 +132,22 @@ release:
     name: "$CI_COMMIT_TAG"
     description: "Automated release for $CI_COMMIT_TAG."
     assets:
+      # `filepath` gives each asset a stable, version-independent path under the
+      # release. It powers GitLab's "permanent link to latest release":
+      #   .../-/releases/permalink/latest/downloads/<filepath>
+      # which redirects to the matching asset of whatever release is newest.
+      # Without it those permalinks 404. Each path must start with `/` and be
+      # unique within the release.
       links:
         - name: "$LINUX_ASSET"
           url: "$PKG_BASE/$LINUX_ASSET"
+          filepath: "/$LINUX_ASSET"
         - name: "$WINDOWS_ASSET"
           url: "$PKG_BASE/$WINDOWS_ASSET"
+          filepath: "/$WINDOWS_ASSET"
         - name: "$LINUX_BIN"
           url: "$PKG_BASE/$LINUX_BIN"
+          filepath: "/$LINUX_BIN"
         - name: "$WINDOWS_BIN"
           url: "$PKG_BASE/$WINDOWS_BIN"
+          filepath: "/$WINDOWS_BIN"
