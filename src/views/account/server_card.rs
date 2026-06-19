@@ -13,6 +13,14 @@ use crate::theme::Theme;
 
 use super::card_anim::CardFrame;
 
+/// Overscan (in px) by which the bottom shadow extends past the card's bottom
+/// edge. The card height is animated on the card element while the shadow is an
+/// absolutely positioned child anchored to the bottom; on Windows the two get
+/// rounded independently each frame, so the moving bottom edge can briefly expose
+/// a 1px seam of the lighter surface beneath. Overshooting the edge (clipped by
+/// the card's overflow_hidden) keeps the shadow covering that seam.
+const SEAM_OVERSCAN: f32 = 2.0;
+
 /// `frame.prev_h` / `frame.target_h`: the height to tween from/to. Caller
 /// (ServerList) computes these based on the card's role in its group
 /// (active/neighbor/edge) and tracks the last rendered height so the animation
@@ -98,10 +106,10 @@ pub fn server_card(
         // element opacity carries the alpha so the scrim lightens on hover/active.
         let bottom_band = div()
             .absolute()
-            .bottom_0()
+            .bottom(px(-SEAM_OVERSCAN))
             .left_0()
             .right_0()
-            .h(px(band_h))
+            .h(px(band_h + SEAM_OVERSCAN))
             .bg(linear_gradient(
                 0.0,
                 linear_color_stop(dark, 0.0),
@@ -176,6 +184,11 @@ pub fn server_card(
                         ),
                 ),
         );
+
+    // Round the (square) Cover banner the same way the hero does: gpui can't
+    // clip a Cover image to a rounded rect, so overlay bg-coloured concave masks
+    // at the corners (tinted to Theme::bg, which is what shows around each card).
+    let built = built.children(crate::widgets::corner_mask::corner_masks(Theme::radius_card()));
 
     // Animation key encodes the target height so any change in role (active /
     // neighbor / normal / edge-active) re-fires the tween, interpolating from

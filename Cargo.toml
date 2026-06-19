@@ -1,6 +1,6 @@
 [package]
 name = "harmoniya-launcher"
-version = "0.3.9"
+version = "0.3.10"
 edition = "2021"
 publish = false
 
@@ -59,7 +59,6 @@ gpui = "0.2"
 # Shared with the workspace crates (specs live in [workspace.dependencies]).
 reqwest = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
 anyhow = { workspace = true }
 futures = { workspace = true }
 tracing = { workspace = true }

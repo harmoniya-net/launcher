@@ -97,7 +97,11 @@ pub fn render(source: &str) -> AnyElement {
 
     let mut heading: Option<HeadingLevel> = None;
     let mut in_blockquote = false;
-    let mut list_items: Vec<String> = Vec::new();
+    // Within a list item we keep accumulating into `runs` (so links are captured)
+    // rather than flushing paragraphs to `out`; each finished item's runs land in
+    // `list_items`.
+    let mut in_item = false;
+    let mut list_items: Vec<Vec<Run>> = Vec::new();
 
     // Flush runs into a paragraph div and push to `out`.
     let flush_para = |runs: &mut Vec<Run>, out: &mut Vec<AnyElement>, blockquote: bool| {
@@ -124,7 +128,7 @@ pub fn render(source: &str) -> AnyElement {
                 Tag::Heading { level, .. } => heading = Some(level),
                 Tag::BlockQuote(_) => { in_blockquote = true; }
                 Tag::List(_) => { list_items.clear(); }
-                Tag::Item => buf.clear(),
+                Tag::Item => { buf.clear(); in_item = true; }
                 Tag::Link { dest_url, .. } => {
                     // Flush any preceding plain text into a Text run
                     if !buf.is_empty() {
@@ -146,8 +150,12 @@ pub fn render(source: &str) -> AnyElement {
                     if !buf.is_empty() {
                         runs.push(Run::Text(std::mem::take(&mut buf)));
                     }
-                    flush_para(&mut runs, &mut out, in_blockquote);
-                    in_blockquote = false;
+                    // Inside a (loose) list item, keep the runs for the item
+                    // instead of emitting a standalone paragraph.
+                    if !in_item {
+                        flush_para(&mut runs, &mut out, in_blockquote);
+                        in_blockquote = false;
+                    }
                 }
                 TagEnd::Heading(_) => {
                     if !buf.is_empty() {
@@ -213,7 +221,11 @@ pub fn render(source: &str) -> AnyElement {
                     }
                 }
                 TagEnd::Item => {
-                    list_items.push(std::mem::take(&mut buf));
+                    if !buf.is_empty() {
+                        runs.push(Run::Text(std::mem::take(&mut buf)));
+                    }
+                    list_items.push(std::mem::take(&mut runs));
+                    in_item = false;
                 }
                 TagEnd::List(_) => {
                     let items = std::mem::take(&mut list_items);
@@ -223,11 +235,27 @@ pub fn render(source: &str) -> AnyElement {
                             .flex_col()
                             .gap(px(4.))
                             .pl(px(20.))
-                            .children(items.into_iter().map(|i| {
+                            .children(items.into_iter().enumerate().map(|(li, item_runs)| {
+                                // Unique id prefix per item so link ids don't
+                                // collide (runs_to_items restarts idx at 0).
+                                let word_items = runs_to_items(
+                                    item_runs,
+                                    Theme::text_secondary().into(),
+                                    &format!("md-li-{li}"),
+                                );
                                 div()
-                                    .text_size(px(14.))
-                                    .text_color(Theme::text_secondary())
-                                    .child(format!("• {i}"))
+                                    .flex()
+                                    .flex_wrap()
+                                    .items_start()
+                                    .gap_x(px(4.))
+                                    .gap_y(px(4.))
+                                    .child(
+                                        div()
+                                            .text_size(px(TEXT_PX))
+                                            .text_color(Theme::text_secondary())
+                                            .child("•"),
+                                    )
+                                    .children(word_items)
                             }))
                             .into_any_element(),
                     );

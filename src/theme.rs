@@ -70,7 +70,7 @@ impl Theme {
     }
     /// Gap between the sidebar column and the main panel.
     pub fn panel_gap() -> Pixels {
-        px(16.)
+        px(8.)
     }
     /// Width of the left sidebar column (nav/list + profile).
     pub fn sidebar_width() -> Pixels {
@@ -78,7 +78,7 @@ impl Theme {
     }
     /// Gap between the sidebar's top section and the profile card below it.
     pub fn sidebar_gap() -> Pixels {
-        px(12.)
+        px(8.)
     }
 
     /// The one bundled UI family. Google's static Inter carries the optical size

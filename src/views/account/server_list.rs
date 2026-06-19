@@ -14,7 +14,7 @@ use crate::theme::Theme;
 use crate::widgets::icon::icon;
 
 use super::card_anim::{
-    ANIM_MS, BANNER_LIT, BANNER_REST, CARD_COL_W, CARD_GAP, CardFrame, CardHeight, CardVisual,
+    ANIM_MS, BANNER_LIT, BANNER_REST, CARD_GAP, CardFrame, CardHeight, CardVisual,
     H_ACTIVE_EDGE, H_HOVER_BUMP, H_NORMAL, SHADOW_ACTIVE, SHADOW_HOVER, SHADOW_REST,
     ease_in_out, target_height,
 };
@@ -211,7 +211,7 @@ impl ServerList {
         div()
             .flex()
             .flex_col()
-            .w(px(CARD_COL_W))
+            .w_full()
             .gap(px(12.))
             .child(header)
             .child(cards)

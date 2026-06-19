@@ -16,10 +16,6 @@ pub(crate) const CARD_GAP: f32 = 10.0;
 /// Keep in sync with the duration used in server_card.
 pub(crate) const ANIM_MS: f32 = 140.0;
 
-/// Fixed width for the card column inside the (448px) sidebar, leaving a 16px
-/// gutter for the scrollbar so cards never reflow when it appears.
-pub(crate) const CARD_COL_W: f32 = 432.0;
-
 /// Bottom-shadow alpha per visual state (see server_card); tracked so only the
 /// card whose state changed animates.
 pub(crate) const SHADOW_REST: f32 = 0.85;

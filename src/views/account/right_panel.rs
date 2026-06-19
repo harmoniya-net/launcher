@@ -1,6 +1,7 @@
 use gpui::{AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Window, div, px};
 
 use crate::state::AppState;
+use crate::theme::Theme;
 
 use super::{description::Description, hero::Hero, news_panel::NewsPanel};
 
@@ -32,7 +33,7 @@ impl Render for RightPanel {
             .min_h(px(0.))
             .flex()
             .flex_col()
-            .gap(px(16.));
+            .gap(Theme::panel_gap());
 
         if has_modpack {
             root = root.child(self.hero.clone());
@@ -42,7 +43,7 @@ impl Render for RightPanel {
             .flex_1()
             .min_h(px(0.))
             .flex()
-            .gap(px(16.))
+            .gap(Theme::panel_gap())
             .child(div().flex_1().min_w(px(0.)).min_h(px(0.)).child(self.description.clone()));
 
         // The news block is per-modpack, so only show it once one is selected.

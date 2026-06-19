@@ -166,6 +166,14 @@ impl AppState {
         cx.spawn(async move |this, cx| {
             let fetches = urls.into_iter().map(|url| async move {
                 let bytes = fetch_image_bytes(&url).await.ok()?;
+                // SVG logos are XML the `image` crate can't decode (it would
+                // error out and the logo would silently never cache). Hand the
+                // raw bytes to GPUI, which rasterizes them via resvg at render
+                // time and scales cleanly on its own, so the Lanczos pre-pass
+                // below doesn't apply.
+                if is_svg(&bytes) {
+                    return Some((url, Arc::new(Image::from_bytes(gpui::ImageFormat::Svg, bytes))));
+                }
                 let img = image::load_from_memory(&bytes).ok()?;
                 let resized = img.resize_exact(40, 40, image::imageops::FilterType::Lanczos3);
                 let mut png: Vec<u8> = Vec::new();
@@ -219,4 +227,15 @@ impl AppState {
         let _ = config::save_json(config::SETTINGS_FILE, &self.settings);
         cx.notify();
     }
+}
+
+/// Sniff whether fetched image bytes are SVG. Logos come from the CMS without a
+/// guaranteed file extension, so we look at the content: an `<svg` tag near the
+/// start, allowing for a leading XML declaration / BOM / whitespace.
+fn is_svg(bytes: &[u8]) -> bool {
+    let head = &bytes[..bytes.len().min(1024)];
+    let text = String::from_utf8_lossy(head);
+    text.trim_start_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
+        .starts_with("<?xml")
+        || text.contains("<svg")
 }

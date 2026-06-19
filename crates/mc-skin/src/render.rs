@@ -98,7 +98,7 @@ fn parts_for(model: Model, legacy: bool, t: f32) -> Vec<Part> {
     // arms rest at the body, drift out, then drift back.
     let arm_sway = (t * 0.45).sin().powi(2) * 0.07; // 0..~4°
     let shoulder_pivot = Vec3::new(0., 6., 0.); // top of arm box (shoulder)
-    vec![
+    let mut parts = vec![
         // body
         Part {
             origin: Vec3::new(0., 18., 0.),
@@ -184,7 +184,79 @@ fn parts_for(model: Model, legacy: bool, t: f32) -> Vec<Part> {
             rotate: (0.0, 0.0, 0.0),
             pivot: Vec3::new(0., 0., 0.),
         },
-    ]
+    ];
+
+    // Second (overlay) layer for the torso and limbs — jacket, sleeves, and
+    // trousers. These regions only exist on modern 64×64 skins; legacy 64×32
+    // skins don't have them, so skip them there. (The head's hat overlay above
+    // exists on both layouts, hence it's unconditional.) Each part mirrors its
+    // base limb's geometry exactly — including the idle arm sway — and is
+    // expanded 0.5 outward, just like the hat.
+    if !legacy {
+        parts.extend([
+            // jacket (body overlay)
+            Part {
+                origin: Vec3::new(0., 18., 0.),
+                w: 8.,
+                h: 12.,
+                d: 4.,
+                u: 16,
+                v: 32,
+                expand: 0.5,
+                rotate: (0.0, 0.0, 0.0),
+                pivot: Vec3::new(0., 0., 0.),
+            },
+            // right sleeve (right arm overlay)
+            Part {
+                origin: Vec3::new(-arm_cx, 18., 0.),
+                w: arm_w,
+                h: 12.,
+                d: 4.,
+                u: 40,
+                v: 32,
+                expand: 0.5,
+                rotate: (0.0, 0.0, -arm_sway),
+                pivot: shoulder_pivot,
+            },
+            // left sleeve (left arm overlay)
+            Part {
+                origin: Vec3::new(arm_cx, 18., 0.),
+                w: arm_w,
+                h: 12.,
+                d: 4.,
+                u: 48,
+                v: 48,
+                expand: 0.5,
+                rotate: (0.0, 0.0, arm_sway),
+                pivot: shoulder_pivot,
+            },
+            // right trouser (right leg overlay)
+            Part {
+                origin: Vec3::new(-2., 6., 0.),
+                w: 4.,
+                h: 12.,
+                d: 4.,
+                u: 0,
+                v: 32,
+                expand: 0.5,
+                rotate: (0.0, 0.0, 0.0),
+                pivot: Vec3::new(0., 0., 0.),
+            },
+            // left trouser (left leg overlay)
+            Part {
+                origin: Vec3::new(2., 6., 0.),
+                w: 4.,
+                h: 12.,
+                d: 4.,
+                u: 0,
+                v: 48,
+                expand: 0.5,
+                rotate: (0.0, 0.0, 0.0),
+                pivot: Vec3::new(0., 0., 0.),
+            },
+        ]);
+    }
+    parts
 }
 
 #[derive(Clone, Copy)]
