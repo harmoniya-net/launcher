@@ -251,6 +251,7 @@ pub fn render(source: &str) -> AnyElement {
                                     .gap_y(px(4.))
                                     .child(
                                         div()
+                                            .flex_shrink_0()
                                             .text_size(px(TEXT_PX))
                                             .text_color(Theme::text_secondary())
                                             .child("•"),
