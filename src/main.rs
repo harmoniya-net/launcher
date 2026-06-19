@@ -222,4 +222,27 @@ fn init_logging() {
     } else {
         let _ = registry.try_init();
     }
+
+    // Route panics into the log too. The big one this catches is GPU/platform
+    // init failing inside `Application::new()` (e.g. "Error creating
+    // DirectWriteTextSystem" when D3D11 device creation fails on outdated
+    // drivers / unsupported GPUs) — a panic that would otherwise vanish under
+    // the windowed subsystem with no console, leaving affected users with
+    // nothing to send. We log the full payload (which carries anyhow's cause
+    // chain) before delegating to the default hook.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}", l.file(), l.line()))
+            .unwrap_or_else(|| "<unknown>".into());
+        let msg = info
+            .payload()
+            .downcast_ref::<&str>()
+            .map(|s| *s)
+            .or_else(|| info.payload().downcast_ref::<String>().map(String::as_str))
+            .unwrap_or("<non-string panic payload>");
+        tracing::error!(target: "panic", "panic at {location}: {msg}");
+        default_hook(info);
+    }));
 }
