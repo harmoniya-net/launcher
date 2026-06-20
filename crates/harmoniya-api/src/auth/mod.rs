@@ -1,16 +1,16 @@
 pub mod callback_server;
 pub mod pkce;
 pub mod storage;
+pub mod store;
 pub mod tokens;
 
 use anyhow::{Context, Result, anyhow};
 use serde::Deserialize;
-use std::sync::LazyLock;
-use tokio::sync::Mutex;
 use url::Url;
 
 use crate::http;
 use crate::now_ms;
+pub use store::TokenStore;
 use tokens::Tokens;
 
 pub const ACCOUNT_SERVICE_BASE: &str = "https://account.harmoniya.net";
@@ -129,52 +129,12 @@ async fn exchange_code(code: &str, verifier: &str, redirect_uri: &str) -> Result
     })
 }
 
-/// Caches the result of the most recent refresh, keyed on the refresh token it
-/// consumed. See [`coordinated_refresh`].
-static REFRESH_CACHE: LazyLock<Mutex<Option<(String, Tokens)>>> = LazyLock::new(|| Mutex::new(None));
-
-/// Refresh, but coordinated across concurrent callers.
-///
-/// The account service **rotates** refresh tokens — each successful refresh
-/// invalidates the token it consumed. Several token consumers (`fetch_me`,
-/// `fetch_skin_profile`, launch, …) run concurrently and each holds its own
-/// clone of the session, so without coordination they'd all POST the *same*
-/// refresh token at once: the first wins and the rest get `invalid_grant`,
-/// which we mistook for a dead session and logged the user out.
-///
-/// We serialize refreshes through one mutex and cache the result keyed on the
-/// token consumed, so concurrent callers sharing a token collapse to a single
-/// server round-trip and all receive the same rotated tokens.
-pub async fn coordinated_refresh(refresh_token: &str) -> Result<Tokens> {
-    let mut guard = REFRESH_CACHE.lock().await;
-    if let Some((used, result)) = guard.as_ref() {
-        // Reuse only while still fresh, so a non-rotating server (same refresh
-        // token back) doesn't pin us to a stale access token forever.
-        if used == refresh_token && !result.is_access_expired() {
-            return Ok(result.clone());
-        }
-    }
-    let new = refresh_tokens(refresh_token).await?;
-    *guard = Some((refresh_token.to_string(), new.clone()));
-    Ok(new)
-}
-
-/// Ensure the access token is usable: if it's expired (or about to be) and we
-/// hold a refresh token, refresh it (coordinated across callers). Returns the
-/// tokens to use plus `Some(rotated)` when they changed, so the caller can
-/// persist + adopt the rotation. The single home for the "refresh if stale"
-/// step that every token consumer (account, skin, launch) needs.
-pub async fn ensure_fresh(tokens: Tokens) -> Result<(Tokens, Option<Tokens>)> {
-    if tokens.is_access_expired() {
-        if let Some(refresh) = tokens.refresh_token.clone() {
-            let rotated = coordinated_refresh(&refresh).await?;
-            return Ok((rotated.clone(), Some(rotated)));
-        }
-    }
-    Ok((tokens, None))
-}
-
-pub async fn refresh_tokens(refresh_token: &str) -> Result<Tokens> {
+/// Exchange a refresh token for a fresh token set. The account service rotates:
+/// a successful call **revokes** `refresh_token` and returns a new one. Callers
+/// must go through [`TokenStore`] so the rotation is always persisted; replaying
+/// a revoked token deletes the whole token family server-side. We keep the old
+/// refresh token if the server omits one (non-rotating fallback).
+pub(crate) async fn refresh_tokens(refresh_token: &str) -> Result<Tokens> {
     let form = [
         ("grant_type", "refresh_token"),
         ("refresh_token", refresh_token),

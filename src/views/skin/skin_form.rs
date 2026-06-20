@@ -5,7 +5,6 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use harmoniya_api::auth::tokens::Tokens;
 use harmoniya_api::services::yggdrasil::{self, SkinModel};
 use crate::state::AppState;
 use crate::theme::Theme;
@@ -46,10 +45,10 @@ impl Render for SkinForm {
         let saving = self.editor.saving;
         let status = self.editor.status.clone();
         let lucky = self.state.read(cx).lucky_profile.clone();
-        let can_skin = lucky.as_ref().map_or(true, |p| p.can_upload_skin());
-        let can_skin_hd = lucky.as_ref().map_or(true, |p| p.can_upload_skin_hd());
-        let can_cape = lucky.as_ref().map_or(true, |p| p.can_upload_cape());
-        let can_cape_hd = lucky.as_ref().map_or(true, |p| p.can_upload_cape_hd());
+        let can_skin = lucky.as_ref().is_none_or(|p| p.can_upload_skin());
+        let can_skin_hd = lucky.as_ref().is_none_or(|p| p.can_upload_skin_hd());
+        let can_cape = lucky.as_ref().is_none_or(|p| p.can_upload_cape());
+        let can_cape_hd = lucky.as_ref().is_none_or(|p| p.can_upload_cape_hd());
 
         let t = crate::i18n::t();
         let skin_name = self.editor.pending_skin.as_ref().map(|(_, n)| n.clone()).unwrap_or_else(|| t.no_file.into());
@@ -215,7 +214,8 @@ enum Kind { Skin, Cape }
 impl SkinForm {
     fn save(&mut self, cx: &mut Context<Self>) {
         if self.editor.saving { return; }
-        let Some(tokens) = self.state.read(cx).tokens.clone() else { return; };
+        let store = self.state.read(cx).session.clone();
+        if !store.signed_in() { return; }
         let model = self.current_model(cx);
         let pending_skin = self.editor.pending_skin.clone();
         let pending_cape = self.editor.pending_cape.clone();
@@ -225,27 +225,26 @@ impl SkinForm {
         cx.notify();
 
         cx.spawn(async move |this, cx| {
-            let res: anyhow::Result<Tokens> = harmoniya_api::http::on_tokio(async move {
-                let (access, _) = harmoniya_api::auth::ensure_fresh(tokens).await?;
+            let res: anyhow::Result<()> = harmoniya_api::http::on_tokio(async move {
+                let access = store.access_token().await?;
                 if let Some((path, name)) = pending_skin {
                     let bytes = std::fs::read(&path)?;
-                    yggdrasil::upload_skin(&access.access_token, bytes, name, model).await?;
+                    yggdrasil::upload_skin(&access, bytes, name, model).await?;
                 }
                 if let Some((path, name)) = pending_cape {
                     let bytes = std::fs::read(&path)?;
-                    yggdrasil::upload_cape(&access.access_token, bytes, name).await?;
+                    yggdrasil::upload_cape(&access, bytes, name).await?;
                 }
-                Ok(access)
+                Ok(())
             }).await;
             this.update(cx, |this, cx| {
                 this.editor.saving = false;
                 match res {
-                    Ok(tokens) => {
+                    Ok(()) => {
                         this.editor.pending_skin = None;
                         this.editor.pending_cape = None;
                         this.editor.status = Some((crate::i18n::t().saved.into(), Some(true)));
                         this.state.update(cx, |s, cx| {
-                            s.adopt_tokens(Some(tokens));
                             s.fetch_skin_profile(cx);
                         });
                     }
@@ -260,25 +259,26 @@ impl SkinForm {
 
     fn reset(&mut self, kind: Kind, cx: &mut Context<Self>) {
         if self.editor.saving { return; }
-        let Some(tokens) = self.state.read(cx).tokens.clone() else { return; };
+        let store = self.state.read(cx).session.clone();
+        if !store.signed_in() { return; }
 
         self.editor.saving = true;
         self.editor.status = Some((crate::i18n::t().resetting.into(), None));
         cx.notify();
 
         cx.spawn(async move |this, cx| {
-            let res: anyhow::Result<Tokens> = harmoniya_api::http::on_tokio(async move {
-                let (access, _) = harmoniya_api::auth::ensure_fresh(tokens).await?;
+            let res: anyhow::Result<()> = harmoniya_api::http::on_tokio(async move {
+                let access = store.access_token().await?;
                 match kind {
-                    Kind::Skin => yggdrasil::reset_skin(&access.access_token).await?,
-                    Kind::Cape => yggdrasil::reset_cape(&access.access_token).await?,
+                    Kind::Skin => yggdrasil::reset_skin(&access).await?,
+                    Kind::Cape => yggdrasil::reset_cape(&access).await?,
                 }
-                Ok(access)
+                Ok(())
             }).await;
             this.update(cx, |this, cx| {
                 this.editor.saving = false;
                 match res {
-                    Ok(tokens) => {
+                    Ok(()) => {
                         this.editor.status = Some((crate::i18n::t().reset_done.into(), Some(true)));
                         match kind {
                             Kind::Skin => {
@@ -290,7 +290,6 @@ impl SkinForm {
                             }
                         }
                         this.state.update(cx, |s, cx| {
-                            s.adopt_tokens(Some(tokens));
                             match kind {
                                 Kind::Skin => {
                                     s.set_preview_skin_bytes(None, cx);

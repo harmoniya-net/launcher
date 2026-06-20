@@ -52,7 +52,7 @@ impl AppState {
         if matches!(self.launch_state, LaunchState::Starting | LaunchState::Progress(_)) {
             return;
         }
-        let Some(tokens) = self.tokens.clone() else {
+        if !self.session.signed_in() {
             self.launch_state = LaunchState::Error(launch::LaunchError {
                 code: launch::ErrorCode::Unknown,
                 message: crate::i18n::t().sign_in_to_play.into(),
@@ -61,7 +61,8 @@ impl AppState {
             });
             cx.notify();
             return;
-        };
+        }
+        let store = self.session.clone();
         let Some(modpack) = self.selected_modpack().cloned() else { return; };
         if modpack.manifest_url.trim().is_empty() {
             self.launch_state = LaunchState::Error(launch::LaunchError {
@@ -93,7 +94,7 @@ impl AppState {
         // Worker runs the whole pipeline on the tokio runtime and reports via tx.
         cx.background_spawn(async move {
             harmoniya_api::http::on_tokio(launch::run(
-                tokens,
+                store,
                 modpack_id,
                 manifest_url,
                 data_dir,
@@ -124,10 +125,6 @@ impl AppState {
     /// stop (terminal state reached).
     fn apply_launch_msg(&mut self, msg: LaunchMsg, cx: &mut Context<Self>) -> bool {
         match msg {
-            LaunchMsg::TokensRefreshed(t) => {
-                self.adopt_tokens(Some(t));
-                false
-            }
             LaunchMsg::Progress(p) => {
                 self.launch_state = LaunchState::Progress(p);
                 cx.notify();

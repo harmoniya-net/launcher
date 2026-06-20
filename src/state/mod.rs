@@ -14,7 +14,7 @@ use futures::StreamExt;
 use gpui::{App, AppContext, Entity, EventEmitter, Global, Image, ImageFormat, Task};
 use serde::{Deserialize, Serialize};
 
-use harmoniya_api::auth::{self, tokens::Tokens};
+use harmoniya_api::auth::{self, TokenStore};
 use harmoniya_api::config;
 use harmoniya_api::services::{
     account::User,
@@ -105,7 +105,10 @@ pub struct AppState {
     pub route: Route,
     /// When set, the auto-updater has taken over the window (see [`UpdatePhase`]).
     pub update: Option<UpdatePhase>,
-    pub tokens: Option<Tokens>,
+    /// The sole owner of the session's OAuth tokens. Consumers ask it for an
+    /// access token (`session.access_token().await`); the refresh token never
+    /// leaves it, so rotation can't be mishandled. See [`TokenStore`].
+    pub session: Arc<TokenStore>,
     pub user: Option<User>,
     pub modpacks: Vec<Modpack>,
     pub groups: Vec<ProjectGroup>,
@@ -181,12 +184,12 @@ impl AppState {
         let settings: Settings = config::load_json(config::SETTINGS_FILE).unwrap_or_default();
         // Activate the persisted language before any view (or the tray) renders.
         crate::i18n::set(settings.language);
-        let tokens = auth::storage::load();
+        let session = auth::TokenStore::load();
 
         let entity = cx.new(|_| AppState {
-            route: if tokens.is_some() { Route::Account } else { Route::Login },
+            route: if session.signed_in() { Route::Account } else { Route::Login },
             update: None,
-            tokens,
+            session,
             user: None,
             modpacks: Vec::new(),
             groups: Vec::new(),
@@ -249,42 +252,37 @@ impl AppState {
         self.modpacks.iter().find(|m| &m.id == id)
     }
 
-    /// Adopt + persist rotated tokens returned by a refresh, if any. The single
-    /// home for the "save the new tokens" tail every auth'd flow shares.
-    pub(crate) fn adopt_tokens(&mut self, refreshed: Option<Tokens>) {
-        if let Some(t) = refreshed {
-            let _ = auth::storage::save(&t);
-            self.tokens = Some(t);
-        }
-    }
 }
 
 // ── Shared helpers used across the concern submodules ───────────────────────
 
-/// Ensure the access token is fresh, run the async closure, and return its
-/// result alongside any rotated tokens the caller should persist.
-async fn with_access_token<T, F, Fut>(tokens: Tokens, f: F) -> anyhow::Result<(T, Option<Tokens>)>
+/// Run an authenticated request: mint a fresh access token from the store, hand
+/// it to `f`, and on a 401/403 refresh once and retry. The store owns rotation +
+/// persistence, so call sites only ever see an access-token string — there's no
+/// rotated token to forget to adopt.
+async fn with_access_token<T, F, Fut>(store: Arc<TokenStore>, f: F) -> anyhow::Result<T>
 where
     F: Fn(String) -> Fut,
     Fut: std::future::Future<Output = anyhow::Result<T>>,
 {
-    // Refresh up front if stale (shared with launch/skin via `auth::ensure_fresh`).
-    let (tokens, mut refreshed) = auth::ensure_fresh(tokens).await?;
-    let value = match f(tokens.access_token.clone()).await {
-        Ok(v) => v,
-        Err(e) => {
-            // Try one refresh on failure, in case the server invalidated mid-call.
-            if let Some(refresh) = tokens.refresh_token.clone() {
-                let new = auth::coordinated_refresh(&refresh).await?;
-                let v = f(new.access_token.clone()).await?;
-                refreshed = Some(new);
-                v
-            } else {
-                return Err(e);
-            }
+    let access = store.access_token().await?;
+    match f(access.clone()).await {
+        Ok(v) => Ok(v),
+        // The token may have been invalidated server-side mid-call; refresh once
+        // (compare-and-swap, so concurrent retries don't double-rotate) and retry.
+        Err(e) if is_unauthorized(&e) => {
+            let access = store.refresh_if_stale(&access).await?;
+            f(access).await
         }
-    };
-    Ok((value, refreshed))
+        Err(e) => Err(e),
+    }
+}
+
+/// Whether an error from a protected endpoint looks like an auth rejection
+/// (worth a refresh-and-retry) rather than a transient/other failure.
+fn is_unauthorized(err: &anyhow::Error) -> bool {
+    let msg = err.to_string();
+    msg.contains("401") || msg.contains("403")
 }
 
 /// True when an error from [`with_access_token`] means the session can't be

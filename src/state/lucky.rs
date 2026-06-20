@@ -2,17 +2,17 @@ use gpui::Context;
 use harmoniya_api::auth;
 use harmoniya_api::services::lucky;
 
-use super::AppState;
+use super::{with_access_token, AppState};
 
 impl AppState {
     pub fn fetch_lucky_profile(&mut self, cx: &mut Context<Self>) {
-        let Some(tokens) = self.tokens.clone() else { return; };
+        if !self.session.signed_in() { return; }
+        let store = self.session.clone();
         cx.spawn(async move |this, cx| {
-            let result = harmoniya_api::http::on_tokio(async move {
-                let (tokens, _) = auth::ensure_fresh(tokens).await?;
-                let ygg = auth::fetch_yggdrasil_token(&tokens.access_token).await?;
+            let result = harmoniya_api::http::on_tokio(with_access_token(store, |access| async move {
+                let ygg = auth::fetch_yggdrasil_token(&access).await?;
                 lucky::fetch_profile(&ygg).await
-            })
+            }))
             .await;
             this.update(cx, |state, cx| match result {
                 Ok(profile) => {

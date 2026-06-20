@@ -8,15 +8,15 @@ use super::{is_auth_dead, with_access_token, AppEvent, AppState, LoginPhase, Rou
 
 impl AppState {
     pub fn fetch_user(&mut self, cx: &mut Context<Self>) {
-        let Some(tokens) = self.tokens.clone() else { return; };
+        if !self.session.signed_in() { return; }
+        let store = self.session.clone();
         cx.spawn(async move |this, cx| {
             let result = harmoniya_api::http::on_tokio(
-                with_access_token(tokens, |t| async move { fetch_me(&t).await })
+                with_access_token(store, |t| async move { fetch_me(&t).await })
             ).await;
             this.update(cx, |state, cx| {
                 match result {
-                    Ok((user, refreshed)) => {
-                        state.adopt_tokens(refreshed);
+                    Ok(user) => {
                         state.user = Some(user);
                         cx.emit(AppEvent::UserLoaded);
                         cx.notify();
@@ -65,8 +65,7 @@ impl AppState {
                 state.pending_login_task = None;
                 match result {
                     Ok(tokens) => {
-                        let _ = auth::storage::save(&tokens);
-                        state.tokens = Some(tokens);
+                        state.session.set(tokens);
                         state.login_phase = LoginPhase::Idle;
                         state.set_route(Route::Account, cx);
                         cx.emit(AppEvent::AuthChanged);
@@ -78,7 +77,7 @@ impl AppState {
                         // Only surface the failure if we're still signed out — a
                         // newer attempt or a completed login shouldn't be clobbered
                         // by a stale flow's timeout.
-                        if state.tokens.is_none() {
+                        if !state.session.signed_in() {
                             state.login_phase = LoginPhase::Error(e.to_string());
                             cx.notify();
                         }
@@ -90,8 +89,7 @@ impl AppState {
     }
 
     pub fn logout(&mut self, cx: &mut Context<Self>) {
-        auth::storage::clear();
-        self.tokens = None;
+        self.session.clear();
         self.user = None;
         self.lucky_profile = None;
         self.skin_profile = None;

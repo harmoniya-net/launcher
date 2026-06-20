@@ -16,7 +16,7 @@ use opys_runtime::{InstallError, InstallOptions, InstallProgress, LaunchOptions,
 /// Re-exported so the app can mint a token and cancel an in-flight install.
 pub use opys_runtime::CancellationToken;
 
-use harmoniya_api::auth::{self, tokens::Tokens};
+use harmoniya_api::auth::{self, TokenStore};
 use harmoniya_api::services::account::fetch_me;
 
 mod progress;
@@ -89,8 +89,6 @@ pub enum LaunchState {
 /// Messages streamed from the worker (running on the tokio runtime) back to the
 /// GPUI entity.
 pub enum LaunchMsg {
-    /// Tokens were refreshed mid-flow; persist + adopt them.
-    TokensRefreshed(Tokens),
     Progress(LaunchProgress),
     Error(LaunchError),
     Done { pid: u32 },
@@ -182,7 +180,7 @@ fn launch_vars(username: &str, uuid: &str, token: &str, root: &str) -> IndexMap<
 /// `tx`. Cancelling `cancel` aborts an in-flight install (downloads included).
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
-    tokens: Tokens,
+    store: Arc<TokenStore>,
     modpack_id: String,
     manifest_url: String,
     data_dir: String,
@@ -200,7 +198,7 @@ pub async fn run(
     };
 
     let result =
-        run_inner(tokens, modpack_id, &manifest_url, &data_dir, extra_vars, features, cancel, &tx, Arc::clone(&tracker))
+        run_inner(store, modpack_id, &manifest_url, &data_dir, extra_vars, features, cancel, &tx, Arc::clone(&tracker))
             .await;
     let msg = match result {
         Ok(pid) => LaunchMsg::Done { pid },
@@ -211,7 +209,7 @@ pub async fn run(
 
 #[allow(clippy::too_many_arguments)]
 async fn run_inner(
-    tokens: Tokens,
+    store: Arc<TokenStore>,
     modpack_id: String,
     manifest_url: &str,
     data_dir: &str,
@@ -221,15 +219,11 @@ async fn run_inner(
     tx: &UnboundedSender<LaunchMsg>,
     tracker: Arc<Mutex<Tracker>>,
 ) -> Result<u32, InstallError> {
-    // Refresh the access token up front if stale (shared `auth::ensure_fresh`),
-    // forwarding any rotation to the UI so it can persist + adopt it.
-    let (tokens, rotated) = auth::ensure_fresh(tokens)
+    // The store owns refresh + rotation + persistence; we just ask for a token.
+    let access = store
+        .access_token()
         .await
         .map_err(|e| InstallError::other(format!("token refresh: {e}")))?;
-    if let Some(new) = rotated {
-        let _ = tx.unbounded_send(LaunchMsg::TokensRefreshed(new));
-    }
-    let access = tokens.access_token.clone();
 
     let user = fetch_me(&access).await.map_err(|e| InstallError::other(e.to_string()))?;
     let ygg_token = auth::fetch_yggdrasil_token(&access)

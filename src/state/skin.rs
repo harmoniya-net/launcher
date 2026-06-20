@@ -32,17 +32,17 @@ impl AppState {
     }
 
     pub fn fetch_skin_profile(&mut self, cx: &mut Context<Self>) {
-        let Some(tokens) = self.tokens.clone() else { return; };
+        if !self.session.signed_in() { return; }
+        let store = self.session.clone();
         cx.spawn(async move |this, cx| {
             let result = harmoniya_api::http::on_tokio(
-                with_access_token(tokens, |t| async move {
+                with_access_token(store, |t| async move {
                     fetch_profile(&t).await.map(|opt| opt.unwrap_or_default())
                 })
             ).await;
             this.update(cx, |state, cx| {
                 match result {
-                    Ok((profile, refreshed)) => {
-                        state.adopt_tokens(refreshed);
+                    Ok(profile) => {
                         state.skin_profile = Some(profile);
                         state.prefetch_head(cx);
                         cx.emit(AppEvent::SkinProfileLoaded);

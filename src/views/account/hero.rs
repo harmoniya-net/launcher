@@ -47,11 +47,11 @@ impl Render for Hero {
         let Some(modpack) = state.selected_modpack().cloned() else {
             return div().into_any_element();
         };
-        let authed = state.tokens.is_some();
+        let authed = state.session.signed_in();
         let server = modpack.title.to_lowercase();
         let lucky = state.lucky_profile.as_ref();
-        let can_play = lucky.map_or(false, |p| p.can_play_modpack(&server));
-        let can_bypass = lucky.map_or(false, |p| p.can_bypass_maintenance(&server));
+        let can_play = lucky.is_some_and(|p| p.can_play_modpack(&server));
+        let can_bypass = lucky.is_some_and(|p| p.can_bypass_maintenance(&server));
         let play_state = if !authed {
             PlayState::Unauthenticated
         } else if modpack.maintaining && !can_bypass {

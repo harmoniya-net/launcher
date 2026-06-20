@@ -239,7 +239,7 @@ fn init_logging() {
         let msg = info
             .payload()
             .downcast_ref::<&str>()
-            .map(|s| *s)
+            .copied()
             .or_else(|| info.payload().downcast_ref::<String>().map(String::as_str))
             .unwrap_or("<non-string panic payload>");
         tracing::error!(target: "panic", "panic at {location}: {msg}");
