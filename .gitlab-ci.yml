@@ -132,11 +132,19 @@ release:
     description: "Automated release for $CI_COMMIT_TAG."
     assets:
       links:
+        # `filepath` becomes the release link's direct_asset_path — what makes the
+        # stable permalink resolve, e.g.
+        #   /-/releases/permalink/latest/downloads/harmoniya-launcher-windows.exe
+        # Without it that permalink 404s (the raw package URLs still work).
         - name: "$LINUX_ASSET"
           url: "$PKG_BASE/$LINUX_ASSET"
+          filepath: "/$LINUX_ASSET"
         - name: "$WINDOWS_ASSET"
           url: "$PKG_BASE/$WINDOWS_ASSET"
+          filepath: "/$WINDOWS_ASSET"
         - name: "$LINUX_BIN"
           url: "$PKG_BASE/$LINUX_BIN"
+          filepath: "/$LINUX_BIN"
         - name: "$WINDOWS_BIN"
           url: "$PKG_BASE/$WINDOWS_BIN"
+          filepath: "/$WINDOWS_BIN"
