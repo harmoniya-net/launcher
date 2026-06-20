@@ -77,41 +77,40 @@ build:linux:
     paths: ["$LINUX_ASSET", "dist/harmoniya-launcher"]
     expire_in: 1 week
 
-# --- Windows release binary (native MSVC build on a Windows runner) ---------
-# Runs on a SaaS Windows runner (PowerShell). gpui needs fxc.exe from the
-# Windows SDK at build time; the VS Build Tools on that image provide it (set
-# GPUI_FXC_PATH if it can't be found). NOTE: not yet exercised in CI — the first
-# tagged pipeline will validate it.
+# --- Windows release binary (cross-compiled from Linux, no Windows runner) --
+# clang-cl + lld-link + the xwin CRT/SDK build a real MSVC-target PE on the same
+# Linux image as build:linux. gpui's fxc shader step is replaced by committed
+# prebuilt DXBC (vendor/gpui/prebuilt/shaders_bytes.rs), and the app manifest +
+# icon are embedded by build.rs (lld-link /MANIFEST:EMBED + llvm-rc). See
+# vendor/gpui/HARMONIYA_PATCH.md and [[windows-cross-compile-feasibility]].
 build:windows:
   stage: build
-  timeout: 3h
   rules:
     - if: $CI_COMMIT_TAG
-  tags: [saas-windows-medium-amd64]
   variables:
-    CARGO_HOME: "$CI_PROJECT_DIR\\.cargo"
+    # cargo-xwin caches the downloaded CRT/SDK here; keep it in the project dir
+    # so GitLab can cache it between runs (the download is large).
+    XWIN_CACHE_DIR: "$CI_PROJECT_DIR/.xwin-cache"
   cache:
-    # Slug, not the raw job name: "$CI_JOB_NAME" is "build:windows", and GitLab
-    # appends "-protected" on protected refs -> "build:windows-protected". The
-    # ':' is illegal in a Windows dir name, so the runner can't create the cache
-    # dir. _SLUG lowercases and replaces non-[a-z0-9] chars with '-', so it's
-    # path-safe ("build-windows-protected").
     key: "$CI_JOB_NAME_SLUG"
     paths:
       - .cargo/registry/
+      - .cargo/bin/
+      - .xwin-cache/
       - target/
   before_script:
-    - Invoke-WebRequest -Uri 'https://win.rustup.rs/x86_64' -OutFile 'rustup-init.exe'
-    - .\rustup-init.exe -y --profile minimal --default-toolchain 1.90.0
-    - $env:Path = "$env:CARGO_HOME\bin;$env:Path"
-    - rustc --version
+    - apt-get update
+    - apt-get install -y --no-install-recommends clang lld llvm tar curl ca-certificates
+    # build.rs uses llvm-rc for the app icon; Debian ships it versioned only.
+    - export LLVM_RC="$(command -v llvm-rc llvm-rc-19 llvm-rc-18 llvm-rc-17 llvm-rc-16 llvm-rc-15 llvm-rc-14 2>/dev/null | head -n1)"
+    - rustup target add x86_64-pc-windows-msvc
+    - command -v cargo-xwin >/dev/null || cargo install cargo-xwin --locked
   script:
-    - cargo build --release --locked
-    - New-Item -ItemType Directory -Force -Path dist | Out-Null
-    - Copy-Item 'target\release\harmoniya-launcher.exe' 'dist\harmoniya-launcher.exe'
-    - tar -C dist -czf "$env:WINDOWS_ASSET" harmoniya-launcher.exe
-    - 'curl.exe --fail --header "JOB-TOKEN: $env:CI_JOB_TOKEN" --upload-file "$env:WINDOWS_ASSET" "$env:PKG_BASE/$env:WINDOWS_ASSET"'
-    - 'curl.exe --fail --header "JOB-TOKEN: $env:CI_JOB_TOKEN" --upload-file dist\harmoniya-launcher.exe "$env:PKG_BASE/$env:WINDOWS_BIN"'
+    - cargo xwin build --release --locked --target x86_64-pc-windows-msvc
+    - install -D target/x86_64-pc-windows-msvc/release/harmoniya-launcher.exe dist/harmoniya-launcher.exe
+    - tar -C dist -czf "$WINDOWS_ASSET" harmoniya-launcher.exe
+    - 'curl --fail --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "$WINDOWS_ASSET" "$PKG_BASE/$WINDOWS_ASSET"'
+    - 'curl --fail --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file dist/harmoniya-launcher.exe "$PKG_BASE/$WINDOWS_BIN"'
   artifacts:
     paths: ["$WINDOWS_ASSET", "dist/harmoniya-launcher.exe"]
     expire_in: 1 week
