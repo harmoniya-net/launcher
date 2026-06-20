@@ -12,6 +12,13 @@ path = "src/main.rs"
 members = ["crates/*"]
 resolver = "2"
 
+# Vendored gpui 0.2.2 with a single Windows-only fix: tolerate
+# GetSystemFontCollection failing (corrupt font cache / bad font registry →
+# ERROR_MORE_DATA) instead of panicking at startup. See vendor/gpui/HARMONIYA_PATCH.md.
+# Drop this once the fix is upstream in a published gpui release.
+[patch.crates-io]
+gpui = { path = "vendor/gpui" }
+
 # Shared dependency specs for every workspace member (the app + crates/*). Pin
 # version + features once here; members opt in with `{ workspace = true }`.
 [workspace.dependencies]
