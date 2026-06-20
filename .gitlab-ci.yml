@@ -104,6 +104,10 @@ build:windows:
     # build.rs uses llvm-rc for the app icon; Debian ships it versioned only.
     - export LLVM_RC="$(command -v llvm-rc llvm-rc-19 llvm-rc-18 llvm-rc-17 llvm-rc-16 llvm-rc-15 llvm-rc-14 2>/dev/null | head -n1)"
     - rustup target add x86_64-pc-windows-msvc
+    # Cached cargo-xwin lives in $CARGO_HOME/bin (which isn't on PATH since we
+    # relocate CARGO_HOME), so put it on PATH — otherwise the guard misses the
+    # cached binary and `cargo install` aborts with "already exists".
+    - export PATH="$CARGO_HOME/bin:$PATH"
     - command -v cargo-xwin >/dev/null || cargo install cargo-xwin --locked
   script:
     - cargo xwin build --release --locked --target x86_64-pc-windows-msvc
