@@ -22,7 +22,9 @@ fn main() {
             macos::build();
         }
         Ok("windows") => {
-            #[cfg(target_os = "windows")]
+            // HARMONIYA cross-build patch: run on any host (not just Windows) so
+            // we can cross-compile a release Windows binary from Linux. The shader
+            // step inside falls back to committed prebuilt DXBC when fxc is absent.
             windows::build();
         }
         _ => (),
@@ -245,7 +247,9 @@ mod macos {
     }
 }
 
-#[cfg(target_os = "windows")]
+// HARMONIYA cross-build patch: no longer host-gated (#[cfg(target_os="windows")]
+// removed) so the shader-embedding step can run when cross-compiling to Windows
+// from another host. The fxc invocation falls back to prebuilt bytes off-Windows.
 mod windows {
     use std::{
         fs,
@@ -259,12 +263,14 @@ mod windows {
         #[cfg(not(debug_assertions))]
         compile_shaders();
 
-        // Embed the Windows manifest and resource file
-        #[cfg(feature = "windows-manifest")]
+        // Embed the Windows manifest and resource file. `embed-resource` is only
+        // a build-dependency on a Windows host, so skip it when cross-compiling
+        // from another host (HARMONIYA cross-build patch).
+        #[cfg(all(feature = "windows-manifest", target_os = "windows"))]
         embed_resource();
     }
 
-    #[cfg(feature = "windows-manifest")]
+    #[cfg(all(feature = "windows-manifest", target_os = "windows"))]
     fn embed_resource() {
         let manifest = std::path::Path::new("resources/windows/gpui.manifest.xml");
         let rc_file = std::path::Path::new("resources/windows/gpui.rc");
@@ -277,14 +283,28 @@ mod windows {
 
     /// You can set the `GPUI_FXC_PATH` environment variable to specify the path to the fxc.exe compiler.
     fn compile_shaders() {
+        let out_dir = std::env::var("OUT_DIR").unwrap();
+        let rust_binding_path = format!("{}/shaders_bytes.rs", out_dir);
+
+        // HARMONIYA cross-build patch: fxc.exe only exists on Windows. When it's
+        // not available (cross-compiling from another host), copy the committed
+        // prebuilt DXBC bindings instead of invoking fxc.
+        let fxc_path = match find_fxc_compiler() {
+            Some(p) => p,
+            None => {
+                let prebuilt = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
+                    .join("prebuilt/shaders_bytes.rs");
+                println!("cargo:rerun-if-changed={}", prebuilt.display());
+                fs::copy(&prebuilt, &rust_binding_path).unwrap_or_else(|e| {
+                    panic!("Failed to copy prebuilt shaders ({}): {e}", prebuilt.display())
+                });
+                return;
+            }
+        };
+
         let shader_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
             .join("src/platform/windows/shaders.hlsl");
-        let out_dir = std::env::var("OUT_DIR").unwrap();
-
         println!("cargo:rerun-if-changed={}", shader_path.display());
-
-        // Check if fxc.exe is available
-        let fxc_path = find_fxc_compiler();
 
         // Define all modules
         let modules = [
@@ -297,7 +317,6 @@ mod windows {
             "polychrome_sprite",
         ];
 
-        let rust_binding_path = format!("{}/shaders_bytes.rs", out_dir);
         if Path::new(&rust_binding_path).exists() {
             fs::remove_file(&rust_binding_path)
                 .expect("Failed to remove existing Rust binding file");
@@ -326,12 +345,14 @@ mod windows {
     }
 
     /// You can set the `GPUI_FXC_PATH` environment variable to specify the path to the fxc.exe compiler.
-    fn find_fxc_compiler() -> String {
+    /// HARMONIYA cross-build patch: returns `None` instead of panicking when fxc
+    /// can't be found, so the caller can fall back to prebuilt shader bytes.
+    fn find_fxc_compiler() -> Option<String> {
         // Check environment variable
         if let Ok(path) = std::env::var("GPUI_FXC_PATH")
             && Path::new(&path).exists()
         {
-            return path;
+            return Some(path);
         }
 
         // Try to find in PATH
@@ -342,18 +363,19 @@ mod windows {
             && output.status.success()
         {
             let path = String::from_utf8_lossy(&output.stdout);
-            return path.trim().to_string();
+            return Some(path.trim().to_string());
         }
 
         // Check the default path
         if Path::new(r"C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\fxc.exe")
             .exists()
         {
-            return r"C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\fxc.exe"
-                .to_string();
+            return Some(
+                r"C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\fxc.exe".to_string(),
+            );
         }
 
-        panic!("Failed to find fxc.exe");
+        None
     }
 
     fn compile_shader_for_module(
