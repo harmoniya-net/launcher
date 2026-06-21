@@ -4,8 +4,31 @@
 //! without auth; CI publishes one asset per target triple, which `self_update`
 //! matches against the running binary's target.
 
+use std::path::PathBuf;
+use std::sync::OnceLock;
+
 use anyhow::Result;
 use self_update::update::ReleaseUpdate;
+
+/// The launcher's own path, captured at startup *before* the updater swaps the
+/// binary. On Linux, once [`install`] replaces the executable in place,
+/// `std::env::current_exe()` resolves `/proc/self/exe` to the now-unlinked old
+/// inode and hands back a bogus `".../harmoniya-launcher (deleted)"` path —
+/// exec'ing that fails, so the app never comes back up after an update. The
+/// original path still holds the freshly-installed binary, so that's what we
+/// re-exec. See [`record_exe_path`] / [`relaunch`].
+static EXE_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+/// Remember the running executable's path. Call once at startup, before any
+/// update could replace the binary.
+pub fn record_exe_path() {
+    match std::env::current_exe() {
+        Ok(path) => {
+            let _ = EXE_PATH.set(path);
+        }
+        Err(e) => tracing::warn!("relaunch: could not record exe path at startup: {e}"),
+    }
+}
 
 /// Build the self-updater for this binary.
 fn updater() -> Result<Box<dyn ReleaseUpdate>> {
@@ -37,16 +60,21 @@ pub fn install() -> Result<bool> {
 ///
 /// Releasing the single-instance lock *before* spawning hands it off cleanly:
 /// the child finds it free, so there's no race with our own (still-alive) process.
+///
+/// We re-exec the path recorded at startup, not `current_exe()`, which is stale
+/// after an in-place update on Linux (see [`EXE_PATH`]).
 pub fn relaunch() -> ! {
     super::single_instance::release();
-    match std::env::current_exe() {
-        Ok(exe) => {
-            let spawned = std::process::Command::new(exe).args(std::env::args_os().skip(1)).spawn();
+    let exe = EXE_PATH.get().cloned().or_else(|| std::env::current_exe().ok());
+    match exe {
+        Some(exe) => {
+            let spawned =
+                std::process::Command::new(&exe).args(std::env::args_os().skip(1)).spawn();
             if let Err(e) = spawned {
-                tracing::error!("relaunch: spawn failed: {e}");
+                tracing::error!("relaunch: spawn {} failed: {e}", exe.display());
             }
         }
-        Err(e) => tracing::error!("relaunch: current_exe failed: {e}"),
+        None => tracing::error!("relaunch: no executable path to spawn"),
     }
     std::process::exit(0);
 }

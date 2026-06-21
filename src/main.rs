@@ -45,6 +45,11 @@ fn main() {
     };
     single_instance::hold(instance);
 
+    // Capture our path now, while it still resolves — the self-updater replaces
+    // the binary in place, after which `current_exe()` is unreliable (it points
+    // at the unlinked old inode on Linux). The updater re-execs this path.
+    crate::shell::update::record_exe_path();
+
     Application::new()
         .with_assets(assets::Assets)
         .run(move |cx: &mut App| {
