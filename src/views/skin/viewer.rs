@@ -2,17 +2,21 @@
 //!
 //! Owns the view state the rasterizer is a pure function of (loaded skin/cape
 //! textures, model, yaw/pitch) plus the idle-animation clock and drag handling,
-//! and feeds the rendered frame to GPUI's `img()`. Re-renders happen only when
-//! the transform or animation actually advances, so cost shows up while
-//! dragging or animating, not at rest.
+//! and feeds the rendered frame to GPUI's `img()`.
+//!
+//! The `mc_skin` rasterizer is a CPU software renderer, too heavy to run on the
+//! UI thread every frame, so renders run on a background worker (one at a time)
+//! and the finished frame is swapped in via `cx.notify`. The UI thread only ever
+//! paints the last ready frame, so the view stays smooth even while the idle
+//! animation or a drag keeps requesting new frames.
 
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use gpui::{
     div, img, px, Context, DispatchPhase, Entity, FontWeight, InteractiveElement, IntoElement,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point,
-    Render, RenderImage, Styled, Window,
+    Render, RenderImage, Styled, Task, Window,
 };
 use image::{Frame, RgbaImage};
 
@@ -30,6 +34,11 @@ const DRAG_PAD_Y: f32 = 60.;
 const DRAG_YAW_PER_PX: f32 = 0.01;
 const DRAG_PITCH_PER_PX: f32 = 0.006;
 const PITCH_LIMIT: f32 = 0.6; // ~34°
+/// Idle-animation framerate. The sway is slow, so this is visually identical to
+/// full vsync while cutting the repaint/present and rasterization rate (the
+/// window's display runs at 60Hz+, but the animation doesn't need it). Drags
+/// aren't capped by this — they repaint on each mouse-move.
+const IDLE_FPS: f32 = 24.0;
 
 /// Map the account-service skin model onto the renderer's arm model.
 fn render_model(model: SkinModel) -> mc_skin::Model {
@@ -81,7 +90,6 @@ fn cape_source(s: &AppState) -> Source {
 }
 
 pub struct SkinViewer {
-    state: Entity<AppState>,
     skin_source: Source,
     skin: Option<RgbaImage>,
     cape_source: Source,
@@ -90,14 +98,27 @@ pub struct SkinViewer {
     yaw: f32,
     pitch: f32,
     drag: Option<(Point<Pixels>, f32, f32)>,
+    /// Last completed frame; always painted (kept while a new one renders so the
+    /// view never flashes empty mid-update).
     rendered: Option<Arc<RenderImage>>,
+    /// Background rasterization in flight, if any. Single-slot: we never queue
+    /// more than one, so a slow worker just throttles the framerate instead of
+    /// piling up work. `None` means the worker is idle.
+    inflight: Option<Task<()>>,
+    /// Pending paced-repaint timer. Single-shot, rescheduled from `render`, so it
+    /// stops automatically when the view is unmounted (no more `render` calls).
+    frame_timer: Option<Task<()>>,
+    /// Set when the *next* desired frame differs from `rendered` for a reason
+    /// other than the animation clock advancing (transform/skin/cape/model
+    /// changed). Drives a re-render even within the same animation quantum.
+    dirty: bool,
     /// Wall-clock origin for the idle animation; `t = elapsed().as_secs_f32()`.
     start: Instant,
-    /// Last animation `t` we rendered for. Used to invalidate the cache when
-    /// the animation has advanced enough to matter.
+    /// Animation `t` of the last frame we *dispatched* to the worker. Used to
+    /// re-render once the animation has advanced enough to matter.
     last_t: f32,
-    /// Device pixel ratio of the last render; re-render if the window moves to a
-    /// display with a different scale so the output stays crisp.
+    /// Device pixel ratio of the last dispatched render; re-render if the window
+    /// moves to a display with a different scale so the output stays crisp.
     last_scale: f32,
 }
 
@@ -126,7 +147,7 @@ impl SkinViewer {
                 changed = true;
             }
             if changed {
-                this.rendered = None;
+                this.dirty = true;
                 cx.notify();
             }
         })
@@ -137,7 +158,6 @@ impl SkinViewer {
         let initial_cape = cape_source(s);
         let model = s.current_skin_model();
         let this = Self {
-            state: state.clone(),
             skin_source: initial_skin.clone(),
             skin: None,
             cape_source: initial_cape.clone(),
@@ -147,6 +167,9 @@ impl SkinViewer {
             pitch: 0.0,
             drag: None,
             rendered: None,
+            inflight: None,
+            frame_timer: None,
+            dirty: false,
             start: Instant::now(),
             last_t: 0.0,
             last_scale: 1.0,
@@ -213,7 +236,7 @@ impl SkinViewer {
             } else {
                 s.cape = Some(rgba);
             }
-            s.rendered = None;
+            s.dirty = true;
             cx.notify();
         })
         .ok();
@@ -227,28 +250,61 @@ impl SkinViewer {
         }
     }
 
-    fn ensure_render(&mut self, t: f32, scale: f32, cx: &mut Context<Self>) -> Option<Arc<RenderImage>> {
-        // Invalidate cache when the idle animation has advanced enough that a
-        // re-render visibly changes anything (~30 fps quantum), or when the
-        // display's scale factor changed (output resolution must follow it).
-        if (t - self.last_t).abs() >= 1.0 / 30.0 || scale != self.last_scale {
-            self.rendered = None;
+    /// Kick off a background rasterization for the current state if one is
+    /// warranted and none is already running. The `mc_skin` software rasterizer
+    /// is too heavy to run on the UI thread every frame, so it runs on a worker
+    /// and the finished frame is swapped into `rendered` via `cx.notify`. Keeping
+    /// a single in-flight render means a slow worker throttles the framerate
+    /// rather than queueing up stale work.
+    fn maybe_spawn_render(&mut self, t: f32, scale: f32, cx: &mut Context<Self>) {
+        if self.inflight.is_some() {
+            return;
         }
-        if let Some(r) = &self.rendered {
-            return Some(r.clone());
+        // Re-render when the transform/skin changed (`dirty`), nothing has been
+        // drawn yet, the animation advanced past a frame quantum, or the display
+        // scale changed (output resolution must follow it). The quantum is half
+        // the frame interval so a paced tick reliably clears it (and an off-beat
+        // repaint, e.g. an ancestor re-render, doesn't dispatch a wasted frame).
+        let stale = self.dirty
+            || self.rendered.is_none()
+            || (t - self.last_t).abs() >= 0.5 / IDLE_FPS
+            || scale != self.last_scale;
+        if !stale {
+            return;
         }
-        let skin = self.skin.as_ref()?;
-        let model = render_model(self.state.read(cx).current_skin_model());
-        let mut buf = mc_skin::rasterize(skin, self.cape.as_ref(), model, self.yaw, self.pitch, t, scale);
-        // RenderImage stores BGRA; our rasterizer produced RGBA so swap R↔B.
-        for px in buf.chunks_exact_mut(4) {
-            px.swap(0, 2);
-        }
-        let arc = Arc::new(RenderImage::new(vec![Frame::new(buf)]));
-        self.rendered = Some(arc.clone());
+        let Some(skin) = self.skin.clone() else {
+            return;
+        };
+        let cape = self.cape.clone();
+        let model = render_model(self.model);
+        let (yaw, pitch) = (self.yaw, self.pitch);
+
+        self.dirty = false;
         self.last_t = t;
         self.last_scale = scale;
-        Some(arc)
+
+        self.inflight = Some(cx.spawn(async move |this, cx| {
+            let frame = cx
+                .background_executor()
+                .spawn(async move {
+                    let mut buf =
+                        mc_skin::rasterize(&skin, cape.as_ref(), model, yaw, pitch, t, scale);
+                    // RenderImage stores BGRA; our rasterizer produced RGBA so swap R↔B.
+                    for px in buf.chunks_exact_mut(4) {
+                        px.swap(0, 2);
+                    }
+                    buf
+                })
+                .await;
+            this.update(cx, |s, _cx| {
+                s.rendered = Some(Arc::new(RenderImage::new(vec![Frame::new(frame)])));
+                s.inflight = None;
+                // Deliberately no `notify`: the paced frame timer drives repaints,
+                // so this frame is shown on the next tick rather than presenting
+                // off-cadence (which would defeat the pacing).
+            })
+            .ok();
+        }));
     }
 }
 
@@ -258,9 +314,24 @@ impl Render for SkinViewer {
         // Render at the display's device-pixel ratio so the image paints 1:1
         // (no nearest-neighbour upscaling → no chunky pixels on HiDPI).
         let scale = window.scale_factor();
-        let rendered = self.ensure_render(t, scale, cx);
-        // Drive the idle animation: schedule another paint at the next vsync.
-        window.request_animation_frame();
+        // Dispatch the (heavy) rasterization to a worker if needed; we paint
+        // whatever frame is already ready below.
+        self.maybe_spawn_render(t, scale, cx);
+        // Drive the idle animation at a paced rate instead of every vsync: a
+        // single-shot timer re-notifies us ~IDLE_FPS times a second. Because it's
+        // (re)armed here in `render`, it naturally stops when the view unmounts.
+        if self.frame_timer.is_none() {
+            self.frame_timer = Some(cx.spawn(async move |this, cx| {
+                cx.background_executor()
+                    .timer(Duration::from_secs_f32(1.0 / IDLE_FPS))
+                    .await;
+                this.update(cx, |s, cx| {
+                    s.frame_timer = None;
+                    cx.notify();
+                })
+                .ok();
+            }));
+        }
 
         // While a drag is active, capture mouse-move and mouse-up at the
         // window level so the rotation keeps tracking even when the cursor
@@ -291,7 +362,7 @@ impl Render for SkinViewer {
                         {
                             viewer.yaw = new_yaw;
                             viewer.pitch = new_pitch;
-                            viewer.rendered = None;
+                            viewer.dirty = true;
                             cx.notify();
                         }
                     });
@@ -335,8 +406,8 @@ impl Render for SkinViewer {
 
         // Always occupy the model's footprint — reserve the box before the first
         // frame renders so the label below doesn't jump when the image appears.
-        if let Some(image) = rendered {
-            wrapper = wrapper.child(img(image).w(px(W)).h(px(H)));
+        if let Some(image) = &self.rendered {
+            wrapper = wrapper.child(img(image.clone()).w(px(W)).h(px(H)));
         } else {
             wrapper = wrapper.child(div().w(px(W)).h(px(H)));
         }

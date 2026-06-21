@@ -15,13 +15,14 @@ pub const HEIGHT: u32 = 290;
 /// Logical pixels per 1 model unit. Decoupled from `HEIGHT` so the buffer can
 /// grow for rotation padding without zooming the character.
 const SCALE: f32 = 7.5;
-/// SSAA target, in samples per *logical* pixel along each axis. We rasterize at
-/// a coverage-only supersampled buffer and downsample blending just the alpha
+/// SSAA factor, in samples per *device* pixel along each axis. We rasterize at a
+/// coverage-only supersampled buffer and downsample blending just the alpha
 /// (interior texels copy directly so they stay crisp; silhouette pixels average
-/// their coverage for a smooth outline). The per-axis sample count is derived
-/// from this and the display scale (`ss ≈ OVERSAMPLE / scale`), so total quality
-/// stays constant across displays while cost is bounded. Higher = smoother but
-/// cost grows quadratically.
+/// their coverage for a smooth outline). This is applied in device space (not
+/// divided by the display scale), so HiDPI displays get genuine edge AA instead
+/// of falling back to hard, aliased silhouettes. `2` ≈ 4× MSAA. Higher = smoother
+/// but cost grows quadratically; affordable because rasterization runs on a
+/// background worker, not the UI thread.
 const OVERSAMPLE: f32 = 2.0;
 /// Master switch for silhouette anti-aliasing (supersample + alpha feather).
 /// Off → a crisp, hard-edged render at the display's native resolution.
@@ -435,11 +436,12 @@ pub fn rasterize(
     let scale = scale.clamp(1.0, 3.0);
     let out_w = (WIDTH as f32 * scale).round().max(1.0) as u32;
     let out_h = (HEIGHT as f32 * scale).round().max(1.0) as u32;
-    // Supersample for a smooth silhouette (when enabled), aiming for ~OVERSAMPLE×
-    // the logical resolution; the output is already at device pixels so fewer
-    // extra samples are needed as `scale` grows. With AA off, 1 sample = crisp.
+    // Supersample for a smooth silhouette (when enabled), at OVERSAMPLE× the
+    // *device* resolution. Sampling in device space (rather than dividing by
+    // `scale`) keeps edges antialiased on HiDPI displays — otherwise `ss` collapsed
+    // to 1 at scale ≥ 2, i.e. no AA at all. With AA off, 1 sample = crisp.
     let ss: u32 = if ANTIALIAS {
-        (OVERSAMPLE / scale).round().max(1.0) as u32
+        OVERSAMPLE.round().max(1.0) as u32
     } else {
         1
     };
