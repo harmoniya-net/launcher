@@ -85,6 +85,13 @@ struct InProgressConfigure {
 pub struct WaylandWindowState {
     xdg_surface: xdg_surface::XdgSurface,
     acknowledged_first_configure: bool,
+    // HARMONIYA PATCH: when true the role objects are destroyed and the surface
+    // unmapped (hidden to tray); we skip rendering/committing so it stays gone.
+    // `min_size`/`title` are remembered so `set_hidden(false)` can recreate the
+    // toplevel faithfully. See `set_hidden`.
+    hidden: bool,
+    min_size: Option<Size<Pixels>>,
+    title: Option<String>,
     pub surface: wl_surface::WlSurface,
     decoration: Option<zxdg_toplevel_decoration_v1::ZxdgToplevelDecorationV1>,
     app_id: Option<String>,
@@ -160,6 +167,9 @@ impl WaylandWindowState {
         Ok(Self {
             xdg_surface,
             acknowledged_first_configure: false,
+            hidden: false,
+            min_size: options.window_min_size,
+            title: None,
             surface,
             decoration,
             app_id: None,
@@ -243,11 +253,17 @@ impl Drop for WaylandWindow {
         if let Some(blur) = &state.blur {
             blur.release();
         }
-        state.toplevel.destroy();
+        // HARMONIYA PATCH: while hidden the role objects are already destroyed
+        // (see `set_hidden`); destroying them again would be a protocol error.
+        if !state.hidden {
+            state.toplevel.destroy();
+        }
         if let Some(viewport) = &state.viewport {
             viewport.destroy();
         }
-        state.xdg_surface.destroy();
+        if !state.hidden {
+            state.xdg_surface.destroy();
+        }
         state.surface.destroy();
 
         let state_ptr = self.0.clone();
@@ -353,7 +369,7 @@ impl WaylandWindowStatePtr {
         Rc::ptr_eq(&self.state, &other.state)
     }
 
-    pub fn frame(&self) {
+    pub fn frame(&self, options: RequestFrameOptions) {
         let mut state = self.state.borrow_mut();
         state.surface.frame(&state.globals.qh, state.surface.id());
         state.resize_throttle = false;
@@ -361,7 +377,7 @@ impl WaylandWindowStatePtr {
 
         let mut cb = self.callbacks.borrow_mut();
         if let Some(fun) = cb.request_frame.as_mut() {
-            fun(Default::default());
+            fun(options);
         }
     }
 
@@ -434,7 +450,15 @@ impl WaylandWindowStatePtr {
             if request_frame_callback {
                 state.acknowledged_first_configure = true;
                 drop(state);
-                self.frame();
+                // HARMONIYA PATCH: force a full redraw on the first configure so
+                // (re)mapping always produces a buffer and the surface actually
+                // maps. Without this, gpui skips drawing when nothing is dirty —
+                // fine on initial creation (always dirty) but it left a
+                // hidden→shown window unmapped (its content was unchanged).
+                self.frame(RequestFrameOptions {
+                    require_presentation: true,
+                    force_render: true,
+                });
             }
         }
     }
@@ -937,7 +961,11 @@ impl PlatformWindow for WaylandWindow {
     }
 
     fn set_title(&mut self, title: &str) {
-        self.borrow().toplevel.set_title(title.to_string());
+        let mut state = self.borrow_mut();
+        state.toplevel.set_title(title.to_string());
+        // HARMONIYA PATCH: remembered so a hidden→shown cycle (which recreates the
+        // toplevel) can restore the title.
+        state.title = Some(title.to_string());
     }
 
     fn set_app_id(&mut self, app_id: &str) {
@@ -954,6 +982,64 @@ impl PlatformWindow for WaylandWindow {
 
     fn minimize(&self) {
         self.borrow().toplevel.set_minimized();
+    }
+
+    // HARMONIYA PATCH: hide-to-tray for Wayland. wlroots compositors (e.g.
+    // Hyprland) ignore xdg_toplevel.set_minimized, so "minimize to tray" was a
+    // silent no-op there — the window never disappeared.
+    //
+    // Hiding destroys the xdg_toplevel + xdg_surface (which unmaps the window)
+    // and detaches the buffer; the wl_surface — and the Blade/Vulkan swapchain
+    // built on it — stays alive, so the window's identity and renderer survive.
+    // Showing recreates the role objects on that same surface: a fresh
+    // xdg_surface always elicits a configure (a bare commit on an unmapped
+    // surface does not, on wlroots), which drives the same frame → draw → buffer
+    // attach map sequence as initial window creation.
+    fn set_hidden(&self, hidden: bool) {
+        let mut state = self.borrow_mut();
+        if state.hidden == hidden {
+            return;
+        }
+        state.hidden = hidden;
+        if hidden {
+            if let Some(decoration) = state.decoration.take() {
+                decoration.destroy();
+            }
+            state.toplevel.destroy();
+            state.xdg_surface.destroy();
+            // Detach the buffer: this unmaps the surface and is required before a
+            // new xdg_surface can be created (doing so from a surface with a
+            // committed buffer is a protocol error).
+            state.surface.attach(None, 0, 0);
+            state.surface.commit();
+            state.acknowledged_first_configure = false;
+        } else {
+            let qh = state.globals.qh.clone();
+            let surface = state.surface.clone();
+            let wm_base = state.globals.wm_base.clone();
+            let decoration_manager = state.globals.decoration_manager.clone();
+
+            let xdg_surface = wm_base.get_xdg_surface(&surface, &qh, surface.id());
+            let toplevel = xdg_surface.get_toplevel(&qh, surface.id());
+            if let Some(size) = state.min_size {
+                toplevel.set_min_size(size.width.0 as i32, size.height.0 as i32);
+            }
+            if let Some(app_id) = state.app_id.clone() {
+                toplevel.set_app_id(app_id);
+            }
+            if let Some(title) = state.title.clone() {
+                toplevel.set_title(title);
+            }
+            let decoration = decoration_manager
+                .as_ref()
+                .map(|dm| dm.get_toplevel_decoration(&toplevel, &qh, surface.id()));
+
+            state.xdg_surface = xdg_surface;
+            state.toplevel = toplevel;
+            state.decoration = decoration;
+            // Kick off the map handshake (mirrors window creation).
+            surface.commit();
+        }
     }
 
     fn zoom(&self) {
@@ -1019,11 +1105,19 @@ impl PlatformWindow for WaylandWindow {
 
     fn draw(&self, scene: &Scene) {
         let mut state = self.borrow_mut();
+        // HARMONIYA PATCH: while hidden the surface is unmapped; presenting a
+        // frame would attach a buffer and re-map (un-hide) it, so skip drawing.
+        if state.hidden {
+            return;
+        }
         state.renderer.draw(scene);
     }
 
     fn completed_frame(&self) {
         let state = self.borrow();
+        if state.hidden {
+            return;
+        }
         state.surface.commit();
     }
 

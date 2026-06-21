@@ -1,10 +1,12 @@
 # Vendored gpui 0.2.2 — Harmoniya patch
 
 This is an unmodified copy of the crates.io `gpui` 0.2.2 source (the `examples/`
-directory is removed to keep the tree small) **except** for one Windows-only
-change, applied via `[patch.crates-io]` in the workspace root `Cargo.toml`.
+directory is removed to keep the tree small) **except** for the changes below,
+applied via `[patch.crates-io]` in the workspace root `Cargo.toml`.
 
-## The change
+Search the source for `HARMONIYA PATCH` to find every modified line.
+
+## Change 1 — DirectWrite font-collection crash (Windows)
 
 `src/platform/windows/direct_write.rs` — `DirectWriteTextSystem::new`
 
@@ -26,11 +28,34 @@ makes that call non-fatal: on failure it logs and falls back to the (empty)
 custom font collection, so the app starts normally with bundled fonts instead of
 crashing.
 
-Search the source for `HARMONIYA PATCH` to find the exact lines.
+## Change 2 — hide-to-tray on Wayland (Linux)
+
+Adds a `PlatformWindow::set_hidden(bool)` method (default no-op) exposed as
+`Window::set_window_hidden`, implemented for the Wayland backend:
+
+- `src/platform.rs` — trait method with a no-op default.
+- `src/window.rs` — `Window::set_window_hidden` wrapper.
+- `src/platform/linux/wayland/window.rs` — the real implementation, plus a
+  `hidden` flag on `WaylandWindowState`.
+
+The launcher hides its window to the system tray on close. The old path called
+`xdg_toplevel.set_minimized`, but **wlroots compositors (Hyprland, Sway, …)
+ignore minimize requests** — so the window simply never disappeared.
+
+`set_hidden(true)` instead unmaps the surface by attaching a null buffer and
+committing; while hidden, `draw`/`completed_frame` skip presenting so a stray
+redraw can't re-map it. `set_hidden(false)` does an empty commit, which makes
+the compositor send a fresh `xdg_surface.configure`; because we reset
+`acknowledged_first_configure`, that runs the same frame → draw → buffer-attach
+sequence as initial window creation, re-mapping the window. The `wl_surface`
+(and the Blade/Vulkan swapchain built on it) is never destroyed, so the window
+identity and renderer survive the cycle. This works on every compositor,
+including wlroots.
 
 ## Why vendored
 
 `gpui` 0.2.2 is the newest published version, and zed `main` / `gpui-ce` /
 `gpui-unofficial` all carry the identical unfixed code — there is no fixed
-release to upgrade to. When the fix lands in a published gpui (or we upstream it
-to gpui-ce), delete `vendor/gpui` and the `[patch.crates-io]` block.
+release to upgrade to. When both changes land in a published gpui (the
+DirectWrite fix upstreamed, and a portable window hide/show API), delete
+`vendor/gpui` and the `[patch.crates-io]` block.

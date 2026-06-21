@@ -4118,6 +4118,13 @@ impl Window {
         self.platform_window.minimize();
     }
 
+    /// HARMONIYA PATCH: hide or show the window at the platform level. On Wayland
+    /// this unmaps/remaps the surface, so the window disappears even on wlroots
+    /// compositors that ignore minimize; a no-op on other platforms.
+    pub fn set_window_hidden(&self, hidden: bool) {
+        self.platform_window.set_hidden(hidden);
+    }
+
     /// Toggle full screen status on the current window at the platform level.
     pub fn toggle_fullscreen(&self) {
         self.platform_window.toggle_fullscreen();

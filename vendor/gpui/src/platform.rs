@@ -484,6 +484,10 @@ pub(crate) trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     fn set_title(&mut self, title: &str);
     fn set_background_appearance(&self, background_appearance: WindowBackgroundAppearance);
     fn minimize(&self);
+    // HARMONIYA PATCH: hide/show the window by (un)mapping its surface.
+    // Implemented on Wayland (where minimize is unreliable on wlroots); a no-op
+    // default elsewhere, since those platforms hide via other means.
+    fn set_hidden(&self, _hidden: bool) {}
     fn zoom(&self);
     fn toggle_fullscreen(&self);
     fn is_fullscreen(&self) -> bool;

@@ -7,10 +7,12 @@
 //!   window in the taskbar, so we go to the raw `HWND` and `ShowWindow(SW_HIDE)`.
 //! - **macOS:** `App::hide()` hides the app (status item stays in the menu bar);
 //!   `App::activate(true)` unhides + focuses it.
-//! - **Linux:** no Wayland protocol lets a client hide its own toplevel, and
-//!   closing the window would quit GPUI (it stops the loop on the last window),
-//!   so we fall back to `minimize`/`activate` — honored by KDE/GNOME/Mutter,
-//!   though some wlroots compositors ignore `minimize`.
+//! - **Linux (Wayland):** no protocol lets a client hide its own toplevel, and
+//!   closing the window would quit GPUI (it stops the loop on the last window).
+//!   `minimize` is unreliable — wlroots compositors (e.g. Hyprland) ignore it —
+//!   so we instead unmap the surface (attach a null buffer) via a vendored-gpui
+//!   `set_window_hidden`, which hides the window on every compositor and re-maps
+//!   on show. See `vendor/gpui/HARMONIYA_PATCH.md`.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -97,13 +99,16 @@ fn set_visible_win32(window: &Window, visible: bool) {
 mod linux {
     use gpui::Window;
 
-    // KDE/GNOME/Mutter honor these; some wlroots compositors ignore minimize,
-    // which we accept rather than special-casing individual compositors.
+    // Unmap the Wayland surface rather than minimize: wlroots compositors (e.g.
+    // Hyprland) silently ignore `set_minimized`, so the old minimize never hid
+    // the window there. Unmapping makes it vanish on every compositor. Show
+    // re-maps and then focuses it.
     pub fn hide(window: &mut Window) {
-        window.minimize_window();
+        window.set_window_hidden(true);
     }
 
     pub fn show(window: &mut Window) {
+        window.set_window_hidden(false);
         window.activate_window();
     }
 }
