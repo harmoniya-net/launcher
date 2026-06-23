@@ -111,7 +111,11 @@ fn main() {
                                 .try_global::<AppStateHandle>()
                                 .map(|h| h.0.read(cx).settings.close_to_tray)
                                 .unwrap_or(true);
-                            if close_to_tray {
+                            // Only hide to the tray if a tray actually exists to
+                            // restore from — otherwise (e.g. no tray host on bare
+                            // wlroots) the window would vanish unrecoverably, so
+                            // fall back to quitting.
+                            if close_to_tray && crate::shell::tray::is_available() {
                                 crate::shell::window_ctl::hide(window, cx);
                             } else {
                                 begin_quit(cx);

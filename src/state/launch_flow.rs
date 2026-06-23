@@ -21,8 +21,12 @@ impl AppState {
     }
 
     /// Hide the main window to the tray via the global handle, deferred so it
-    /// runs once the current update cycle unwinds.
+    /// runs once the current update cycle unwinds. No-ops when there's no tray
+    /// to restore from, so a post-launch hide can't strand the window off-screen.
     pub fn hide_window(&self, cx: &mut Context<Self>) {
+        if !crate::shell::tray::is_available() {
+            return;
+        }
         let Some(MainWindow(handle)) = cx.try_global::<MainWindow>() else { return };
         let handle = *handle;
         cx.defer(move |cx| {

@@ -10,7 +10,29 @@
 //! The menu's toggle label tracks [`crate::shell::window_ctl::is_visible`]; call
 //! [`refresh`] after the window's visibility changes to re-render it.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use futures::channel::mpsc::UnboundedSender;
+
+/// Set once a tray icon has successfully registered with the desktop's tray
+/// host. Stays `false` when there's no host to register with — e.g. a bare
+/// wlroots session with no StatusNotifierWatcher (`ServiceUnknown: The name is
+/// not activatable`). Hiding the window to a tray that isn't there would strand
+/// it with no way back, so the window controller consults [`is_available`] and
+/// falls back to quitting (on close) or staying visible (after a launch).
+static TRAY_AVAILABLE: AtomicBool = AtomicBool::new(false);
+
+/// Whether a tray icon is actually present to restore the window from. `false`
+/// until registration succeeds, and never flips true when there's no tray host.
+/// On Linux this is set from the tray's background thread a beat after startup;
+/// it's reliably settled by the time any user-driven close/hide can run.
+pub fn is_available() -> bool {
+    TRAY_AVAILABLE.load(Ordering::Relaxed)
+}
+
+fn mark_available() {
+    TRAY_AVAILABLE.store(true, Ordering::Relaxed);
+}
 
 /// Commands the tray pushes back to the GPUI foreground loop.
 #[derive(Clone, Copy, Debug)]
@@ -121,6 +143,7 @@ mod linux {
         std::thread::spawn(move || match (LauncherTray { tx }).spawn() {
             Ok(handle) => {
                 let _ = HANDLE.set(handle);
+                super::mark_available();
             }
             Err(e) => tracing::warn!(error = %harmoniya_api::obs::cause_chain(&e), "tray unavailable"),
         });
@@ -192,6 +215,7 @@ mod desktop {
                 TRAY.with(|c| *c.borrow_mut() = Some(t));
                 TOGGLE.with(|c| *c.borrow_mut() = Some(toggle));
                 QUIT.with(|c| *c.borrow_mut() = Some(quit));
+                super::mark_available();
             }
             Err(e) => {
                 tracing::warn!(error = %harmoniya_api::obs::cause_chain(&e), "tray unavailable");
