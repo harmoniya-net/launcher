@@ -23,15 +23,16 @@ use futures::channel::mpsc::UnboundedSender;
 static TRAY_AVAILABLE: AtomicBool = AtomicBool::new(false);
 
 /// Whether a tray icon is actually present to restore the window from. `false`
-/// until registration succeeds, and never flips true when there's no tray host.
-/// On Linux this is set from the tray's background thread a beat after startup;
-/// it's reliably settled by the time any user-driven close/hide can run.
+/// until registration succeeds; on Linux it then tracks the StatusNotifierWatcher
+/// live, so it flips true if a tray host starts up after us and false again if
+/// the host goes away. Set from the tray's background thread, but reliably
+/// settled by the time any user-driven close/hide can run.
 pub fn is_available() -> bool {
     TRAY_AVAILABLE.load(Ordering::Relaxed)
 }
 
-fn mark_available() {
-    TRAY_AVAILABLE.store(true, Ordering::Relaxed);
+fn set_available(available: bool) {
+    TRAY_AVAILABLE.store(available, Ordering::Relaxed);
 }
 
 /// Commands the tray pushes back to the GPUI foreground loop.
@@ -134,18 +135,48 @@ mod linux {
                 .into(),
             ]
         }
+
+        // The StatusNotifierWatcher (re)appeared — ksni has re-registered our
+        // item, so the icon is live again and hide-to-tray is safe.
+        fn watcher_online(&self) {
+            tracing::debug!("tray watcher online");
+            super::set_available(true);
+        }
+
+        // The watcher went away (host crashed/disabled, or wasn't up yet at
+        // startup). Mark the tray unavailable so the window controller stops
+        // hiding into it, and return `true` to keep the service alive so the
+        // icon comes back automatically when the watcher returns.
+        fn watcher_offline(&self, reason: ksni::OfflineReason) -> bool {
+            tracing::debug!(?reason, "tray watcher offline; waiting for it to return");
+            super::set_available(false);
+            true
+        }
     }
 
     pub fn spawn(tx: UnboundedSender<TrayCmd>) {
         // `spawn` blocks briefly to set up the D-Bus connection, then the service
         // runs on ksni's own thread — so do the setup off the UI thread. The
         // stored Handle keeps the service alive after this thread exits.
-        std::thread::spawn(move || match (LauncherTray { tx }).spawn() {
-            Ok(handle) => {
-                let _ = HANDLE.set(handle);
-                super::mark_available();
+        std::thread::spawn(move || {
+            // Optimistically assume a tray is present. `assume_sni_available(true)`
+            // turns a missing StatusNotifierWatcher into a soft error instead of a
+            // hard `spawn()` failure, so the service stays alive and registers our
+            // icon if/when a tray host appears — fixing the common race where the
+            // panel starts after the launcher. If the watcher is absent at startup,
+            // `watcher_offline` fires (synchronously, here) and corrects the flag
+            // to false; if it's present, registration just succeeds and the
+            // optimistic `true` stands.
+            super::set_available(true);
+            match (LauncherTray { tx }).assume_sni_available(true).spawn() {
+                Ok(handle) => {
+                    let _ = HANDLE.set(handle);
+                }
+                Err(e) => {
+                    super::set_available(false);
+                    tracing::warn!(error = %harmoniya_api::obs::cause_chain(&e), "tray unavailable");
+                }
             }
-            Err(e) => tracing::warn!(error = %harmoniya_api::obs::cause_chain(&e), "tray unavailable"),
         });
     }
 
@@ -215,7 +246,7 @@ mod desktop {
                 TRAY.with(|c| *c.borrow_mut() = Some(t));
                 TOGGLE.with(|c| *c.borrow_mut() = Some(toggle));
                 QUIT.with(|c| *c.borrow_mut() = Some(quit));
-                super::mark_available();
+                super::set_available(true);
             }
             Err(e) => {
                 tracing::warn!(error = %harmoniya_api::obs::cause_chain(&e), "tray unavailable");
