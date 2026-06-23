@@ -223,13 +223,13 @@ async fn run_inner(
     let access = store
         .access_token()
         .await
-        .map_err(|e| InstallError::other(format!("token refresh: {e}")))?;
+        .map_err(|e| InstallError::other(format!("token refresh: {e:#}")))?;
 
-    let user = fetch_me(&access).await.map_err(|e| InstallError::other(e.to_string()))?;
+    let user = fetch_me(&access).await.map_err(|e| InstallError::other(format!("{e:#}")))?;
     let ygg_token = auth::fetch_yggdrasil_token(&access)
         .await
-        .map_err(|e| InstallError::other(e.to_string()))?;
-    let uuid = uuid_from_ygg(&ygg_token).map_err(|e| InstallError::other(e.to_string()))?;
+        .map_err(|e| InstallError::other(format!("{e:#}")))?;
+    let uuid = uuid_from_ygg(&ygg_token).map_err(|e| InstallError::other(format!("{e:#}")))?;
 
     tokio::fs::create_dir_all(data_dir).await.map_err(|source| InstallError::Io {
         path: data_dir.to_owned(),

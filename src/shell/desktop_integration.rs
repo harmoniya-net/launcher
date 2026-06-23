@@ -11,7 +11,7 @@ pub fn ensure() {
     #[cfg(target_os = "linux")]
     std::thread::spawn(|| {
         if let Err(e) = linux::install() {
-            tracing::warn!("desktop integration: {e}");
+            tracing::warn!(error = %harmoniya_api::obs::Chain(&e), "desktop integration");
         }
     });
 }

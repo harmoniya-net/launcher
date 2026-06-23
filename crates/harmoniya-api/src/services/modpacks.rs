@@ -101,7 +101,7 @@ pub async fn fetch_all() -> Result<Vec<Modpack>> {
         .json(&serde_json::json!({ "query": QUERY }))
         .send()
         .await
-        .map_err(|e| anyhow!("modpacks request: {e}"))?
+        .map_err(|e| anyhow!("modpacks request: {}", crate::obs::cause_chain(&e)))?
         .error_for_status()
         .map_err(|e| anyhow!("modpacks: {e}"))?
         .text()
@@ -109,7 +109,7 @@ pub async fn fetch_all() -> Result<Vec<Modpack>> {
     let resp: GqlResponse = match serde_json::from_str(&raw) {
         Ok(v) => v,
         Err(e) => {
-            tracing::error!("modpacks parse failed: {e}\n--- body ---\n{}\n--- end ---", raw);
+            tracing::error!(error = %crate::obs::cause_chain(&e), body = %raw, "modpacks parse failed");
             return Err(anyhow!("modpacks parse: {e}"));
         }
     };

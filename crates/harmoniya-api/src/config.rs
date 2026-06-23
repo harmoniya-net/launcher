@@ -53,7 +53,7 @@ pub fn save_json<T: Serialize>(name: &str, value: &T) -> Result<()> {
     let bytes = serde_json::to_vec_pretty(value)?;
     std::thread::spawn(move || {
         if let Err(e) = write_atomic(&path, &bytes) {
-            tracing::warn!("persistence write {path:?}: {e}");
+            tracing::warn!(?path, error = %crate::obs::Chain(&e), "persistence write failed");
         }
     });
     Ok(())

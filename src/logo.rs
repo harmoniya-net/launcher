@@ -23,7 +23,7 @@ fn render(size: u32) -> Option<RgbaImage> {
     let tree = match usvg::Tree::from_data(LOGO_SVG, &usvg::Options::default()) {
         Ok(tree) => tree,
         Err(e) => {
-            tracing::warn!("logo svg parse: {e}");
+            tracing::warn!(error = %harmoniya_api::obs::cause_chain(&e), "logo svg parse");
             return None;
         }
     };

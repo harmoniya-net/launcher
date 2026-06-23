@@ -98,7 +98,7 @@ impl AppState {
                         cx.notify();
                     }
                     // Keep the stale-but-valid catalog on a background refresh.
-                    Err(e) if silent => tracing::warn!("modpack refresh failed: {e}"),
+                    Err(e) if silent => tracing::warn!(error = %harmoniya_api::obs::Chain(&e), "modpack refresh failed"),
                     Err(e) => {
                         state.modpacks_error = Some(e.to_string());
                         cx.notify();

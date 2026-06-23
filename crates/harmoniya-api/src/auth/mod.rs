@@ -117,7 +117,11 @@ async fn exchange_code(code: &str, verifier: &str, redirect_uri: &str) -> Result
         .form(&form)
         .send()
         .await
-        .map_err(|e| anyhow!("token exchange: {e}"))?
+        // Fold reqwest's `source()` chain into the message: the bare error is
+        // the opaque "error sending request for url (…)"; the real cause (DNS /
+        // connect refused / TLS-trust failure) is one level down. Keep the
+        // "token exchange:" prefix — it's what the login screen surfaces.
+        .map_err(|e| anyhow!("token exchange: {}", crate::obs::cause_chain(&e)))?
         .error_for_status()
         .map_err(|e| anyhow!("token exchange: {e}"))?
         .json()
@@ -145,7 +149,9 @@ pub(crate) async fn refresh_tokens(refresh_token: &str) -> Result<Tokens> {
         .form(&form)
         .send()
         .await
-        .map_err(|e| anyhow!("refresh: {e}"))?;
+        // Surface the transport cause (see `exchange_code`). The "refresh:"
+        // prefix is load-bearing: `state::is_auth_dead` matches on it.
+        .map_err(|e| anyhow!("refresh: {}", crate::obs::cause_chain(&e)))?;
     let status = resp.status();
     let body = resp.text().await.unwrap_or_default();
     if !status.is_success() {
@@ -168,7 +174,8 @@ pub async fn fetch_yggdrasil_token(access_token: &str) -> Result<String> {
         .bearer_auth(access_token)
         .send()
         .await
-        .map_err(|e| anyhow!("bifrost: {e}"))?
+        // Surface the transport cause (see `exchange_code`).
+        .map_err(|e| anyhow!("bifrost: {}", crate::obs::cause_chain(&e)))?
         .error_for_status()
         .map_err(|e| anyhow!("bifrost: {e}"))?
         .json()

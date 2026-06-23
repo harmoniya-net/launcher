@@ -70,7 +70,7 @@ pub async fn fetch_profile(access_token: &str) -> Result<Option<SkinProfile>> {
         .get(&profile_url)
         .send()
         .await
-        .map_err(|e| anyhow!("profile: {e}"))?;
+        .map_err(|e| anyhow!("profile: {}", crate::obs::cause_chain(&e)))?;
 
     // Bifrost upserts the profile from the JWT on any *authed* request, but this
     // read isn't authed. On a brand-new account's first login the profile isn't
@@ -87,7 +87,7 @@ pub async fn fetch_profile(access_token: &str) -> Result<Option<SkinProfile>> {
             .get(&profile_url)
             .send()
             .await
-            .map_err(|e| anyhow!("profile: {e}"))?;
+            .map_err(|e| anyhow!("profile: {}", crate::obs::cause_chain(&e)))?;
     }
 
     if resp.status() == reqwest::StatusCode::NO_CONTENT {
@@ -128,7 +128,7 @@ pub async fn upload_skin(access_token: &str, bytes: Vec<u8>, filename: String, m
         .multipart(form)
         .send()
         .await
-        .map_err(|e| anyhow!("upload skin: {e}"))?;
+        .map_err(|e| anyhow!("upload skin: {}", crate::obs::cause_chain(&e)))?;
     resp.error_for_status().map_err(|e| anyhow!("upload skin: {e}"))?;
     Ok(())
 }
@@ -143,7 +143,7 @@ pub async fn upload_cape(access_token: &str, bytes: Vec<u8>, filename: String) -
         .multipart(form)
         .send()
         .await
-        .map_err(|e| anyhow!("upload cape: {e}"))?;
+        .map_err(|e| anyhow!("upload cape: {}", crate::obs::cause_chain(&e)))?;
     resp.error_for_status().map_err(|e| anyhow!("upload cape: {e}"))?;
     Ok(())
 }
@@ -163,7 +163,7 @@ async fn delete_active(access_token: &str, kind: &str) -> Result<()> {
         .bearer_auth(ygg_token)
         .send()
         .await
-        .map_err(|e| anyhow!("delete {kind}: {e}"))?;
+        .map_err(|e| anyhow!("delete {kind}: {}", crate::obs::cause_chain(&e)))?;
     resp.error_for_status().map_err(|e| anyhow!("delete {kind}: {e}"))?;
     Ok(())
 }

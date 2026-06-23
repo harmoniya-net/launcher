@@ -26,7 +26,7 @@ pub fn record_exe_path() {
         Ok(path) => {
             let _ = EXE_PATH.set(path);
         }
-        Err(e) => tracing::warn!("relaunch: could not record exe path at startup: {e}"),
+        Err(e) => tracing::warn!(error = %harmoniya_api::obs::cause_chain(&e), "relaunch: could not record exe path at startup"),
     }
 }
 
@@ -71,7 +71,7 @@ pub fn relaunch() -> ! {
             let spawned =
                 std::process::Command::new(&exe).args(std::env::args_os().skip(1)).spawn();
             if let Err(e) = spawned {
-                tracing::error!("relaunch: spawn {} failed: {e}", exe.display());
+                tracing::error!(exe = %exe.display(), error = %harmoniya_api::obs::cause_chain(&e), "relaunch: spawn failed");
             }
         }
         None => tracing::error!("relaunch: no executable path to spawn"),

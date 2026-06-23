@@ -90,7 +90,7 @@ pub async fn fetch_profile(yggdrasil_token: &str) -> Result<LuckyProfile> {
         .bearer_auth(yggdrasil_token)
         .send()
         .await
-        .map_err(|e| anyhow!("lucky /me: {e}"))?
+        .map_err(|e| anyhow!("lucky /me: {}", crate::obs::cause_chain(&e)))?
         .error_for_status()
         .map_err(|e| anyhow!("lucky /me: {e}"))?
         .json::<LuckyProfile>()

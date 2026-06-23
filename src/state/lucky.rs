@@ -19,7 +19,7 @@ impl AppState {
                     state.lucky_profile = Some(profile);
                     cx.notify();
                 }
-                Err(e) => tracing::warn!("fetch_lucky_profile: {e}"),
+                Err(e) => tracing::warn!(error = %harmoniya_api::obs::Chain(&e), "fetch_lucky_profile failed"),
             })
             .ok();
         })

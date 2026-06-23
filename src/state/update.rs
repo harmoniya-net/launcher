@@ -31,7 +31,7 @@ impl AppState {
                 Some(Ok(Some(v))) => v,
                 Some(Ok(None)) => return, // already current
                 Some(Err(e)) => {
-                    tracing::warn!("update check: {e}");
+                    tracing::warn!(error = %harmoniya_api::obs::Chain(&e), "update check failed");
                     return;
                 }
                 None => return,
@@ -62,7 +62,7 @@ impl AppState {
                 }
                 other => {
                     if let Some(Err(e)) = other {
-                        tracing::warn!("update install: {e}");
+                        tracing::warn!(error = %harmoniya_api::obs::Chain(&e), "update install failed");
                     }
                     // Nothing installed (or it failed) — drop the screen, carry on.
                     let _ = this.update(cx, |s, cx| {

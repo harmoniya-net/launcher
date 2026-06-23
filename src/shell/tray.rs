@@ -122,7 +122,7 @@ mod linux {
             Ok(handle) => {
                 let _ = HANDLE.set(handle);
             }
-            Err(e) => tracing::warn!("tray unavailable: {e}"),
+            Err(e) => tracing::warn!(error = %harmoniya_api::obs::cause_chain(&e), "tray unavailable"),
         });
     }
 
@@ -168,7 +168,7 @@ mod desktop {
             .and_then(|_| menu.append(&PredefinedMenuItem::separator()))
             .and_then(|_| menu.append(&quit))
         {
-            tracing::warn!("tray menu: {e}");
+            tracing::warn!(error = %harmoniya_api::obs::cause_chain(&e), "tray menu");
             return;
         }
         let toggle_id = toggle.id().clone();
@@ -177,7 +177,7 @@ mod desktop {
         let icon = match Icon::from_rgba(render_rgba(64), 64, 64) {
             Ok(i) => i,
             Err(e) => {
-                tracing::warn!("tray icon: {e}");
+                tracing::warn!(error = %harmoniya_api::obs::cause_chain(&e), "tray icon");
                 return;
             }
         };
@@ -194,7 +194,7 @@ mod desktop {
                 QUIT.with(|c| *c.borrow_mut() = Some(quit));
             }
             Err(e) => {
-                tracing::warn!("tray unavailable: {e}");
+                tracing::warn!(error = %harmoniya_api::obs::cause_chain(&e), "tray unavailable");
                 return;
             }
         }

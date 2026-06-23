@@ -45,7 +45,7 @@ impl HttpClient for GpuiHttpClient {
                 let mut builder = client.request(method, &url);
                 for (k, v) in headers { builder = builder.header(k, v); }
                 if !body_bytes.is_empty() { builder = builder.body(body_bytes); }
-                let resp = builder.send().await.map_err(|e| anyhow!("reqwest: {e}"))?;
+                let resp = builder.send().await.map_err(|e| anyhow!("reqwest: {}", harmoniya_api::obs::cause_chain(&e)))?;
                 let status = resp.status().as_u16();
                 let resp_headers: Vec<(String, Vec<u8>)> = resp
                     .headers()

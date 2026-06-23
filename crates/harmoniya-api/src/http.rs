@@ -32,6 +32,13 @@ pub fn client() -> &'static Client {
             .user_agent(concat!("harmoniya-launcher/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(10))
             .timeout(Duration::from_secs(30))
+            // Trust the union of the bundled Mozilla roots and the OS
+            // certificate store. Native roots cover machines behind an
+            // AV/corporate-proxy TLS interceptor (whose root is only in the OS
+            // store); webpki roots are the fallback if the OS store fails to
+            // load. See the `reqwest` features note in the workspace Cargo.toml.
+            .tls_built_in_webpki_certs(true)
+            .tls_built_in_native_certs(true)
             .build()
             .expect("reqwest build")
     })

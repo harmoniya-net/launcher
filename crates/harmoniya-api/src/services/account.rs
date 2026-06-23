@@ -19,7 +19,7 @@ pub async fn fetch_me(access_token: &str) -> Result<User> {
         .bearer_auth(access_token)
         .send()
         .await
-        .map_err(|e| anyhow!("/api/me request: {e}"))?
+        .map_err(|e| anyhow!("/api/me request: {}", crate::obs::cause_chain(&e)))?
         .error_for_status()
         .map_err(|e| anyhow!("/api/me: {e}"))?
         .json::<User>()

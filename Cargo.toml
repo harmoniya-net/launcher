@@ -29,8 +29,16 @@ serde_json = "1"
 futures = "0.3"
 tracing = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "time", "process", "fs", "sync"] }
+# TLS: trust BOTH the bundled Mozilla roots (`webpki-roots`) and the OS
+# certificate store (`native-roots`). webpki-roots alone is a frozen snapshot
+# that ignores the platform store, so any machine behind an antivirus /
+# corporate-proxy TLS interceptor — whose root lives only in the OS store —
+# fails every HTTPS request with an opaque "error sending request for url".
+# Loading both stores (see `http::client`) makes the launcher trust whatever
+# the system browser trusts. `rustls-tls` is just an alias for webpki-only.
 reqwest = { version = "0.12", default-features = false, features = [
-  "rustls-tls",
+  "rustls-tls-webpki-roots",
+  "rustls-tls-native-roots",
   "json",
   "gzip",
   "multipart",

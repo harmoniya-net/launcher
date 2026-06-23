@@ -131,7 +131,7 @@ impl AppState {
                 false
             }
             LaunchMsg::Error(e) => {
-                tracing::warn!("launch failed: {} ({:?})", e.message, e.code);
+                tracing::warn!(error = %e.message, code = ?e.code, "launch failed");
                 self.launch_state = LaunchState::Error(e);
                 cx.notify();
                 true

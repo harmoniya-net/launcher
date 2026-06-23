@@ -11,6 +11,7 @@
 pub mod auth;
 pub mod config;
 pub mod http;
+pub mod obs;
 pub mod services;
 
 use std::time::{SystemTime, UNIX_EPOCH};

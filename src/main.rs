@@ -65,7 +65,7 @@ fn main() {
                 Cow::Borrowed(include_bytes!("../assets/fonts/Inter-Bold.ttf")),
             ];
             if let Err(e) = cx.text_system().add_fonts(fonts) {
-                tracing::warn!("failed to load bundled Inter fonts: {e}");
+                tracing::warn!(error = %harmoniya_api::obs::Chain(&e), "failed to load bundled Inter fonts");
             }
 
             let state = AppState::boot(cx);

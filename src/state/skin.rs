@@ -49,7 +49,7 @@ impl AppState {
                         cx.notify();
                     }
                     Err(e) => {
-                        tracing::warn!("fetch_skin_profile failed: {e}");
+                        tracing::warn!(error = %harmoniya_api::obs::Chain(&e), "fetch_skin_profile failed");
                         if is_auth_dead(&e) { state.logout(cx); }
                     }
                 }

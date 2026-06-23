@@ -54,7 +54,7 @@ pub fn acquire() -> Instance {
         Ok(instance) if instance.is_single() => Instance::Primary(Some(instance)),
         Ok(_) => Instance::AlreadyRunning,
         Err(e) => {
-            tracing::warn!("single-instance guard unavailable: {e}");
+            tracing::warn!(error = %harmoniya_api::obs::cause_chain(&e), "single-instance guard unavailable");
             Instance::Primary(None)
         }
     }
@@ -88,7 +88,7 @@ pub fn serve_focus() -> Option<UnboundedReceiver<()>> {
     let listener = match TcpListener::bind(("127.0.0.1", FOCUS_PORT)) {
         Ok(l) => l,
         Err(e) => {
-            tracing::warn!("focus listener bind on :{FOCUS_PORT} failed: {e}");
+            tracing::warn!(port = FOCUS_PORT, error = %harmoniya_api::obs::cause_chain(&e), "focus listener bind failed");
             return None;
         }
     };
