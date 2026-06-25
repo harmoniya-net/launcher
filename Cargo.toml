@@ -1,6 +1,6 @@
 [package]
 name = "harmoniya-launcher"
-version = "0.5.5"
+version = "0.5.6"
 edition = "2021"
 publish = false
 
@@ -88,7 +88,6 @@ harmoniya-launch = { path = "crates/harmoniya-launch" }
 mc-skin = { path = "crates/mc-skin" }
 
 # App-only dependencies.
-native-dialog = "0.9"
 single-instance = "0.3"
 rust-embed = "8"
 pulldown-cmark = { version = "0.12", default-features = false }

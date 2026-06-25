@@ -9,7 +9,7 @@ use harmoniya_api::services::yggdrasil::{self, SkinModel};
 use crate::state::AppState;
 use crate::theme::Theme;
 use super::skin_form_widgets::{
-    action_button, file_field, model_field, pick_png, reset_link,
+    action_button, file_field, model_field, reset_link,
 };
 
 #[derive(Default, Clone)]
@@ -89,31 +89,31 @@ impl Render for SkinForm {
                     .flex_col()
                     .gap(px(20.))
                     .child(file_field(t.skin_file, skin_name, !saving && can_skin, move |_, _, cx| {
-                        if let Some(path) = pick_png() {
+                        let handle = pick_skin.clone();
+                        crate::views::pick_path(cx, false, move |path, cx| {
                             let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
                             let max = if can_skin_hd { 2048 } else { 64 };
-                            if let Ok((w, h)) = image::image_dimensions(&path) {
-                                if w > max || h > max {
-                                    pick_skin.update(cx, |this, cx| {
+                            let dims = image::image_dimensions(&path).ok();
+                            let bytes = std::fs::read(&path).ok().map(std::sync::Arc::new);
+                            handle.update(cx, |this, cx| {
+                                if let Some((w, h)) = dims {
+                                    if w > max || h > max {
                                         this.editor.status = Some((
                                             crate::i18n::max_skin_size(max),
                                             Some(false),
                                         ));
                                         cx.notify();
-                                    });
-                                    return;
+                                        return;
+                                    }
                                 }
-                            }
-                            let bytes = std::fs::read(&path).ok().map(std::sync::Arc::new);
-                            pick_skin.update(cx, |this, cx| {
                                 this.editor.pending_skin = Some((path, name));
                                 this.editor.status = None;
                                 if let Some(b) = bytes {
                                     this.state.update(cx, |s, cx| s.set_preview_skin_bytes(Some(b), cx));
                                 }
                                 cx.notify();
-                            });
-                        }
+                            }).ok();
+                        });
                     }))
                     .child(model_field(model, !saving && can_skin, {
                         let h = model_classic;
@@ -135,31 +135,31 @@ impl Render for SkinForm {
                         }
                     }))
                     .child(file_field(t.cape_file, cape_name, !saving && can_cape, move |_, _, cx| {
-                        if let Some(path) = pick_png() {
+                        let handle = pick_cape.clone();
+                        crate::views::pick_path(cx, false, move |path, cx| {
                             let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
                             let max = if can_cape_hd { 2048 } else { 64 };
-                            if let Ok((w, h)) = image::image_dimensions(&path) {
-                                if w > max || h > max {
-                                    pick_cape.update(cx, |this, cx| {
+                            let dims = image::image_dimensions(&path).ok();
+                            let bytes = std::fs::read(&path).ok().map(std::sync::Arc::new);
+                            handle.update(cx, |this, cx| {
+                                if let Some((w, h)) = dims {
+                                    if w > max || h > max {
                                         this.editor.status = Some((
                                             crate::i18n::max_cape_size(max),
                                             Some(false),
                                         ));
                                         cx.notify();
-                                    });
-                                    return;
+                                        return;
+                                    }
                                 }
-                            }
-                            let bytes = std::fs::read(&path).ok().map(std::sync::Arc::new);
-                            pick_cape.update(cx, |this, cx| {
                                 this.editor.pending_cape = Some((path, name));
                                 this.editor.status = None;
                                 if let Some(b) = bytes {
                                     this.state.update(cx, |s, cx| s.set_preview_cape_bytes(Some(b), cx));
                                 }
                                 cx.notify();
-                            });
-                        }
+                            }).ok();
+                        });
                     })),
             )
             .child(

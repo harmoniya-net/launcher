@@ -134,12 +134,13 @@ pub(crate) fn path_control(
                 .cursor_pointer()
                 .hover(|s| s.bg(Theme::surface_hover()))
                 .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                    let b = native_dialog::DialogBuilder::file();
-                    let result = if dir { b.open_single_dir().show() } else { b.open_single_file().show() };
-                    if let Ok(Some(path)) = result {
+                    let handle = h.clone();
+                    let mid = mid.clone();
+                    let nm = nm.clone();
+                    crate::views::pick_path(cx, dir, move |path, cx| {
                         let p = path.to_string_lossy().to_string();
-                        h.update(cx, |s, cx| s.set_option_value(mid.clone(), nm.clone(), Some(p), cx));
-                    }
+                        handle.update(cx, |s, cx| s.set_option_value(mid, nm, Some(p), cx)).ok();
+                    });
                 })
                 .into_any_element()
         } else {

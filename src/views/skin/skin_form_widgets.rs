@@ -1,8 +1,6 @@
 //! Stateless widget builders for the skin form (file field, model radios, action
 //! button, reset link) and small helpers. Extracted from `skin_form.rs`.
 
-use std::path::PathBuf;
-
 use gpui::{
     FontWeight, InteractiveElement, IntoElement, MouseButton, ParentElement, SharedString,
     Styled, Window, div, px,
@@ -10,15 +8,6 @@ use gpui::{
 
 use harmoniya_api::services::yggdrasil::SkinModel;
 use crate::theme::Theme;
-
-pub(crate) fn pick_png() -> Option<PathBuf> {
-    native_dialog::DialogBuilder::file()
-        .add_filter("PNG", ["png"])
-        .open_single_file()
-        .show()
-        .ok()
-        .flatten()
-}
 
 /// Truncate from the start with a leading ellipsis so the *end* of the file
 /// name (extension, suffix) remains visible: "long-filename.png" → "…name.png".

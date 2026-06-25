@@ -97,13 +97,11 @@ fn install_dir_section(state: &Entity<AppState>, data_dir: Option<String>) -> gp
                             .cursor_pointer()
                             .hover(|s| s.bg(Theme::surface_hover()))
                             .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                                let result = native_dialog::DialogBuilder::file()
-                                    .open_single_dir()
-                                    .show();
-                                if let Ok(Some(path)) = result {
+                                let handle = state_pick.clone();
+                                crate::views::pick_path(cx, true, move |path, cx| {
                                     let path = path.to_string_lossy().to_string();
-                                    state_pick.update(cx, |s, cx| s.set_data_dir(Some(path), cx));
-                                }
+                                    handle.update(cx, |s, cx| s.set_data_dir(Some(path), cx)).ok();
+                                });
                             })
                             .child(i18n::t().pick),
                     )
