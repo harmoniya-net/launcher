@@ -236,10 +236,10 @@ async fn run_inner(
         source,
     })?;
 
-    // Start from the user's modpack options, then layer the base vars on top so
-    // the critical ones (username/uuid/token/root) can never be overridden.
-    let mut vars = extra_vars;
-    for (k, v) in launch_vars(&user.username, &uuid, &ygg_token, data_dir) {
+    // Start from the base vars, then layer the user's modpack options on top so
+    // modpack options always override (incl. username/uuid/token/root).
+    let mut vars = launch_vars(&user.username, &uuid, &ygg_token, data_dir);
+    for (k, v) in extra_vars {
         vars.insert(k, v);
     }
 
