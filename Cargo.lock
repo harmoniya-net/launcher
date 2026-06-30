@@ -2830,7 +2830,7 @@ dependencies = [
 
 [[package]]
 name = "harmoniya-launcher"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "anyhow",
  "directories",
@@ -4402,9 +4402,9 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "opys-core"
-version = "0.1.11"
+version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7d9a8dd80b0260e13963ad1665105eac50c77b3445f78cd0eb39b75757247c0"
+checksum = "919de588349c2206a050ebf65126169a8bd86a76dc26bcfc1133528f490b1a1c"
 dependencies = [
  "base64",
  "indexmap",
@@ -4417,9 +4417,9 @@ dependencies = [
 
 [[package]]
 name = "opys-mojang-rules"
-version = "0.1.11"
+version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec7fe5afbffb8fc258cfa1a25b2e9a7bb614cbdff6a7c4074f87575d93518da8"
+checksum = "d5fab5ac3c0b6b1c097d45023aea24e72408f7d31b4600710ff3fa6f77cd266b"
 dependencies = [
  "regex",
  "serde",
@@ -4428,9 +4428,9 @@ dependencies = [
 
 [[package]]
 name = "opys-runtime"
-version = "0.1.11"
+version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e2a51d91e0096de8cb774d4e1824b8365d11297c2fbd053929c2705e67a93fe"
+checksum = "06afcd2d367cf20b9c80c6ea948a5ed960f38b254028ccb1eb4cacb5fdfdb6f8"
 dependencies = [
  "base64",
  "bytes",
