@@ -248,7 +248,7 @@ impl Render for ServerList {
             list = list.child(empty(crate::i18n::t().no_modpacks));
         } else {
             let can_view = |m: &Modpack| {
-                lucky.as_ref().is_some_and(|p| p.can_view_modpack(&m.title.to_lowercase()))
+                lucky.as_ref().is_some_and(|p| p.can_view_modpack(&m.id))
             };
             // Favourites group first — pinned modpacks moved out of their projects.
             let favs: Vec<Modpack> = modpacks
