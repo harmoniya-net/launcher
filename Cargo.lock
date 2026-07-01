@@ -4402,9 +4402,9 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "opys-core"
-version = "0.1.24"
+version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "919de588349c2206a050ebf65126169a8bd86a76dc26bcfc1133528f490b1a1c"
+checksum = "2aa27919d8c73611a781c2580662b0e967076be6cbb6e75ad3fb9c1c3379229e"
 dependencies = [
  "base64",
  "indexmap",
@@ -4417,9 +4417,9 @@ dependencies = [
 
 [[package]]
 name = "opys-mojang-rules"
-version = "0.1.24"
+version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5fab5ac3c0b6b1c097d45023aea24e72408f7d31b4600710ff3fa6f77cd266b"
+checksum = "84de9924fd246f24e8b1f0ce09e5790dce0681fbe5b10a5295fa213b8e5f04b6"
 dependencies = [
  "regex",
  "serde",
@@ -4428,9 +4428,9 @@ dependencies = [
 
 [[package]]
 name = "opys-runtime"
-version = "0.1.24"
+version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06afcd2d367cf20b9c80c6ea948a5ed960f38b254028ccb1eb4cacb5fdfdb6f8"
+checksum = "1b18a3910edc990b067449be3df485f394292ec46fb16475a7b409be007d6da4"
 dependencies = [
  "base64",
  "bytes",
