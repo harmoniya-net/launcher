@@ -28,8 +28,9 @@ const LARGE_IMAGE: &str = "logo";
 
 /// Shown as a button on the activity. Discord only renders activity buttons on
 /// *other* users' view of your profile, never on your own — that's a Discord
-/// restriction, not something we control.
-const WEBSITE_URL: &str = "https://www.harmoniya.net";
+/// restriction, not something we control. The `r=discord_activity` query param
+/// lets the website's analytics attribute traffic to this button.
+const WEBSITE_URL: &str = "https://harmoniya.net?r=discord_activity";
 
 /// How often to retry the handshake while Discord isn't reachable.
 const RETRY: Duration = Duration::from_secs(15);
