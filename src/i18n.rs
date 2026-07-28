@@ -53,6 +53,12 @@ pub struct Strings {
     pub tray_show: &'static str,
     pub tray_quit: &'static str,
 
+    // Discord Rich Presence (the "playing"/"installing" + modpack name are
+    // parametric — see `discord_playing`/`discord_installing` below — so they
+    // render as one line instead of Discord splitting details/state onto two)
+    pub discord_browsing: &'static str,
+    pub discord_website: &'static str,
+
     // Hero play button states
     pub play: &'static str,
     pub stop: &'static str,
@@ -186,6 +192,9 @@ static UK: Strings = Strings {
     tray_show: "Показати",
     tray_quit: "Вийти",
 
+    discord_browsing: "У лаунчері",
+    discord_website: "Сайт Harmoniya",
+
     play: "Грати",
     stop: "Зупинити",
     play_maintenance: "Тех. роботи",
@@ -275,6 +284,9 @@ static EN: Strings = Strings {
     tray_hide: "Hide",
     tray_show: "Show",
     tray_quit: "Quit",
+
+    discord_browsing: "In the launcher",
+    discord_website: "Harmoniya Website",
 
     play: "Play",
     stop: "Stop",
@@ -395,6 +407,23 @@ pub fn downloading_version(version: &str) -> String {
     match current() {
         Lang::Uk => format!("Завантаження версії {version}…"),
         Lang::En => format!("Downloading version {version}…"),
+    }
+}
+
+/// Discord Rich Presence "playing" line — one line ("Грає на X"), not
+/// Discord's separate details/state lines.
+pub fn discord_playing(modpack: &str) -> String {
+    match current() {
+        Lang::Uk => format!("Грає на {modpack}"),
+        Lang::En => format!("Playing {modpack}"),
+    }
+}
+
+/// Discord Rich Presence "installing" line — see [`discord_playing`].
+pub fn discord_installing(modpack: &str) -> String {
+    match current() {
+        Lang::Uk => format!("Встановлює {modpack}"),
+        Lang::En => format!("Installing {modpack}"),
     }
 }
 

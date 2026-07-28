@@ -52,8 +52,9 @@ impl AppState {
     }
 
     /// Switch the UI language and persist it. Views re-read the catalog on
-    /// every render, so notifying repaints everything; the tray menu is
-    /// re-rendered explicitly since it lives outside GPUI.
+    /// every render, so notifying repaints everything; the tray menu and the
+    /// Discord activity text are refreshed explicitly since both live outside
+    /// GPUI.
     pub fn set_language(&mut self, lang: crate::i18n::Lang, cx: &mut Context<Self>) {
         if self.settings.language == lang {
             return;
@@ -62,6 +63,7 @@ impl AppState {
         let _ = config::save_json(config::SETTINGS_FILE, &self.settings);
         crate::i18n::set(lang);
         crate::shell::tray::refresh();
+        crate::shell::discord::invalidate();
         cx.notify();
     }
 }

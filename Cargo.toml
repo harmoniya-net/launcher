@@ -101,6 +101,10 @@ self_update = { version = "0.41", default-features = false, features = [
 http_client = { package = "gpui_http_client", version = "0.2" }
 time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
 emojis = "0.8.2"
+# Discord Rich Presence over the local IPC socket/pipe to the desktop Discord
+# client. Blocking API — driven from its own thread (see shell::discord), not
+# the tokio runtime.
+discord-rich-presence = "1"
 unicode-segmentation = "1.13.2"
 resvg = "0.47.0"
 

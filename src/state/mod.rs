@@ -5,6 +5,8 @@
 //! - [`launch_flow`] — the play/install/launch flow and window hide-to-tray.
 //! - [`skin`] — skin profile, live preview, head-avatar prefetch.
 //! - [`ui`] — routing, modals, and launcher settings.
+//! - `discord` — derives the Discord Rich Presence activity shown for the
+//!   current state; wired up as a global observer in [`AppState::boot`].
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -26,6 +28,7 @@ use harmoniya_api::services::{
 use harmoniya_launch::pipeline::{CancellationToken, LaunchState};
 
 mod catalog;
+mod discord;
 mod launch_flow;
 mod lucky;
 mod session;
@@ -140,6 +143,10 @@ pub struct AppState {
     pub launch_cancel: Option<CancellationToken>,
     /// Modpack ids whose game is currently running (mirrors `game`'s registry).
     pub running: HashSet<String>,
+    /// When each currently-running modpack started (unix ms), so the Discord
+    /// activity can show elapsed playtime. Entries are dropped once the game
+    /// exits.
+    pub running_since: HashMap<String, i64>,
     /// Keeps the running-set watcher loop alive for the app's lifetime.
     pub running_task: Option<Task<()>>,
     pub active_modal: Option<ActiveModal>,
@@ -210,6 +217,7 @@ impl AppState {
             launch_task: None,
             launch_cancel: None,
             running: HashSet::new(),
+            running_since: HashMap::new(),
             running_task: None,
             active_modal: None,
             news_modal_body: None,
@@ -231,6 +239,11 @@ impl AppState {
                     let ids: HashSet<String> = harmoniya_launch::game::running_ids().into_iter().collect();
                     let _ = entity.update(cx, |state, cx| {
                         if state.running != ids {
+                            let now = harmoniya_api::now_ms() as i64;
+                            for id in &ids {
+                                state.running_since.entry(id.clone()).or_insert(now);
+                            }
+                            state.running_since.retain(|id, _| ids.contains(id));
                             state.running = ids;
                             cx.notify();
                         }
@@ -239,6 +252,17 @@ impl AppState {
             }
         });
         entity.update(cx, |state, _| state.running_task = Some(watcher));
+
+        // Discord Rich Presence: best-effort, so it lives entirely off the
+        // GPUI thread (see `shell::discord`). Re-derive it from state on every
+        // notification — cheap, and `discord::set` dedupes unchanged values
+        // before it ever touches the IPC thread.
+        crate::shell::discord::init();
+        cx.observe(&entity, |entity, cx| {
+            crate::shell::discord::set(entity.read(cx).discord_presence());
+        })
+        .detach();
+        crate::shell::discord::set(entity.read(cx).discord_presence());
 
         entity
     }

@@ -216,8 +216,12 @@ fn begin_quit(cx: &mut App) {
 }
 
 fn init_logging() {
+    // discord-rich-presence logs via the `log` facade (bridged into `tracing`
+    // by tracing-subscriber's default features), and warns every retry while
+    // the desktop Discord client isn't running — which is the common case, not
+    // a problem. Left at the default level it'd spam the log file forever.
     let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("warn,harmoniya_launcher=debug"));
+        .unwrap_or_else(|_| EnvFilter::new("warn,harmoniya_launcher=debug,discord_rich_presence=off"));
     let console = fmt::layer().with_target(false);
     let registry = tracing_subscriber::registry().with(filter).with(console);
 

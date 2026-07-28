@@ -4,6 +4,7 @@
 //! labels), so it lives in the binary rather than a library crate.
 
 pub mod desktop_integration;
+pub mod discord;
 pub mod single_instance;
 pub mod tray;
 pub mod update;
