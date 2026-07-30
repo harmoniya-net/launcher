@@ -32,14 +32,20 @@ pub fn record_exe_path() {
 
 /// Build the self-updater for this binary.
 fn updater() -> Result<Box<dyn ReleaseUpdate>> {
-    Ok(self_update::backends::github::Update::configure()
+    let mut builder = self_update::backends::github::Update::configure();
+    builder
         .repo_owner("harmoniya-net")
         .repo_name("launcher")
         .bin_name("harmoniya-launcher")
         .current_version(env!("CARGO_PKG_VERSION"))
         .show_download_progress(false)
-        .no_confirm(true)
-        .build()?)
+        .no_confirm(true);
+    // On macOS the release archive holds a whole .app bundle (see
+    // .github/workflows/release.yml), not a bare binary at the archive root —
+    // point the extractor at the executable's exact path inside it.
+    #[cfg(target_os = "macos")]
+    builder.bin_path_in_archive("Harmoniya.app/Contents/MacOS/{{ bin }}");
+    Ok(builder.build()?)
 }
 
 /// Check GitHub Releases for a newer build. `Some(version)` if an update is
