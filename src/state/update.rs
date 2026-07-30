@@ -1,4 +1,4 @@
-//! Auto-update: on boot, check GitLab Releases for a newer build. If one exists,
+//! Auto-update: on boot, check GitHub Releases for a newer build. If one exists,
 //! take over the window with an updating screen while it downloads, then relaunch
 //! into the new binary.
 

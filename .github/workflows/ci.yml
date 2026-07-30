@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Cargo check (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: check-linux
+      # GPUI links xcb + xkbcommon on Linux; cargo check probes them via
+      # pkg-config even without linking a binary.
+      - name: Install Linux deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config cmake clang curl \
+            libxcb1-dev libxcb-xkb-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev libxau-dev libxdmcp-dev
+      - run: cargo check --locked
+
+  check-windows:
+    name: Cargo check (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: check-windows
+      - run: cargo check --locked
+
+  check-macos:
+    name: Cargo check (macOS)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: check-macos
+      - run: cargo check --locked

@@ -1,6 +1,6 @@
-//! Best-effort GitLab-Releases self-update. `self_update` is sync, so the three
+//! Best-effort GitHub-Releases self-update. `self_update` is sync, so the three
 //! entry points below are blocking and must be dispatched off the UI thread (see
-//! `state::update`). The GitLab project is public, so release assets download
+//! `state::update`). The GitHub repo is public, so release assets download
 //! without auth; CI publishes one asset per target triple, which `self_update`
 //! matches against the running binary's target.
 
@@ -32,8 +32,8 @@ pub fn record_exe_path() {
 
 /// Build the self-updater for this binary.
 fn updater() -> Result<Box<dyn ReleaseUpdate>> {
-    Ok(self_update::backends::gitlab::Update::configure()
-        .repo_owner("harmoniya")
+    Ok(self_update::backends::github::Update::configure()
+        .repo_owner("harmoniya-net")
         .repo_name("launcher")
         .bin_name("harmoniya-launcher")
         .current_version(env!("CARGO_PKG_VERSION"))
@@ -42,7 +42,7 @@ fn updater() -> Result<Box<dyn ReleaseUpdate>> {
         .build()?)
 }
 
-/// Check GitLab Releases for a newer build. `Some(version)` if an update is
+/// Check GitHub Releases for a newer build. `Some(version)` if an update is
 /// available, `None` if we're already current. Blocking (network).
 pub fn check() -> Result<Option<String>> {
     let latest = updater()?.get_latest_release()?;
