@@ -8,6 +8,7 @@ use pulldown_cmark::{Event, HeadingLevel, Parser, Tag, TagEnd};
 
 use crate::theme::Theme;
 use crate::widgets::emoji::{self, Segment};
+use rsx::rsx;
 
 const TEXT_PX: f32 = 14.;
 
@@ -109,13 +110,12 @@ pub fn render(source: &str) -> AnyElement {
         let color = if blockquote { Theme::text_faint() } else { Theme::text_secondary() };
         let items = runs_to_items(std::mem::take(runs), color.into(), "md-link");
         out.push(
-            div()
-                .flex()
-                .flex_wrap()
-                .gap_x(px(4.))
-                .gap_y(px(4.))
-                .children(items)
-                .into_any_element(),
+            rsx! {
+                <div flex flex_wrap gap_x={px(4.)} gap_y={px(4.)}>
+                    { ..items }
+                </div>
+            }
+            .into_any_element(),
         );
     };
 
@@ -182,16 +182,20 @@ pub fn render(source: &str) -> AnyElement {
                     if !buf.is_empty() {
                         let text = std::mem::take(&mut buf);
                         out.push(
-                            div()
-                                .px(px(16.))
-                                .py(px(12.))
-                                .rounded(Theme::radius_block())
-                                .bg(gpui::hsla(0.0, 0.0, 1.0, 0.06))
-                                .font_family("monospace")
-                                .text_size(px(13.))
-                                .text_color(Theme::text_secondary())
-                                .child(text)
-                                .into_any_element(),
+                            rsx! {
+                                <div
+                                    px={px(16.)}
+                                    py={px(12.)}
+                                    rounded={Theme::radius_block()}
+                                    bg={gpui::hsla(0.0, 0.0, 1.0, 0.06)}
+                                    font_family="monospace"
+                                    text_size={px(13.)}
+                                    text_color={Theme::text_secondary()}
+                                >
+                                    {text}
+                                </div>
+                            }
+                            .into_any_element(),
                         );
                     }
                 }
@@ -207,16 +211,20 @@ pub fn render(source: &str) -> AnyElement {
                             "md-bq-link",
                         );
                         out.push(
-                            div()
-                                .pl(px(12.))
-                                .border_l_2()
-                                .border_color(Theme::accent())
-                                .flex()
-                                .flex_wrap()
-                                .gap_x(px(4.))
-                                .gap_y(px(4.))
-                                .children(items)
-                                .into_any_element(),
+                            rsx! {
+                                <div
+                                    pl={px(12.)}
+                                    border_l_2
+                                    border_color={Theme::accent()}
+                                    flex
+                                    flex_wrap
+                                    gap_x={px(4.)}
+                                    gap_y={px(4.)}
+                                >
+                                    { ..items }
+                                </div>
+                            }
+                            .into_any_element(),
                         );
                     }
                 }
@@ -278,11 +286,7 @@ pub fn render(source: &str) -> AnyElement {
                 }
                 flush_para(&mut runs, &mut out, false);
                 out.push(
-                    div()
-                        .h(px(1.))
-                        .w_full()
-                        .bg(Theme::surface_raised())
-                        .my(px(12.))
+                    rsx! { <div h={px(1.)} w_full bg={Theme::surface_raised()} my={px(12.)} /> }
                         .into_any_element(),
                 );
             }
@@ -296,11 +300,10 @@ pub fn render(source: &str) -> AnyElement {
     }
     flush_para(&mut runs, &mut out, false);
 
-    div()
-        .flex()
-        .flex_col()
-        .gap(px(10.))
-        .text_size(px(14.))
-        .children(out)
-        .into_any_element()
+    rsx! {
+        <div flex flex_col gap={px(10.)} text_size={px(14.)}>
+            { ..out }
+        </div>
+    }
+    .into_any_element()
 }

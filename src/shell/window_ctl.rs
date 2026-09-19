@@ -13,6 +13,9 @@
 //!   so we instead unmap the surface (attach a null buffer) via a vendored-gpui
 //!   `set_window_hidden`, which hides the window on every compositor and re-maps
 //!   on show. See `vendor/gpui/HARMONIYA_PATCH.md`.
+//! - **Linux (X11):** `set_window_hidden` has no X11 backend (Wayland-only), so
+//!   we fall back to the original `minimize`/`activate`, which window managers
+//!   like i3 honor. Picked at runtime via `gpui::guess_compositor()`.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -99,16 +102,31 @@ fn set_visible_win32(window: &Window, visible: bool) {
 mod linux {
     use gpui::Window;
 
+    // `set_window_hidden` only has a real backend implementation on Wayland
+    // (see vendor/gpui/HARMONIYA_PATCH.md) — on X11 it's a no-op default, so
+    // calling it there silently fails to hide the window. Route by the same
+    // runtime compositor guess GPUI itself uses, falling back to the old
+    // minimize/activate on X11 (and anything else, e.g. headless).
+    fn is_wayland() -> bool {
+        gpui::guess_compositor() == "Wayland"
+    }
+
     // Unmap the Wayland surface rather than minimize: wlroots compositors (e.g.
     // Hyprland) silently ignore `set_minimized`, so the old minimize never hid
     // the window there. Unmapping makes it vanish on every compositor. Show
     // re-maps and then focuses it.
     pub fn hide(window: &mut Window) {
-        window.set_window_hidden(true);
+        if is_wayland() {
+            window.set_window_hidden(true);
+        } else {
+            window.minimize_window();
+        }
     }
 
     pub fn show(window: &mut Window) {
-        window.set_window_hidden(false);
+        if is_wayland() {
+            window.set_window_hidden(false);
+        }
         window.activate_window();
     }
 }

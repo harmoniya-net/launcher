@@ -9,6 +9,7 @@ use crate::theme::Theme;
 
 use super::{placeholder::Placeholder, skin_form::SkinForm};
 use crate::views::account::user_bar::UserBar;
+use rsx::rsx;
 
 pub struct SkinView {
     state: Entity<AppState>,
@@ -51,110 +52,98 @@ impl Render for SkinView {
         let close_to_tray = self.state.read(cx).settings.close_to_tray;
         let t = crate::i18n::t();
 
-        div()
-            .flex()
-            .gap(Theme::panel_gap())
-            .p(Theme::screen_pad())
-            .size_full()
-            .bg(Theme::bg())
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(Theme::sidebar_gap())
-                    .flex_shrink_0()
-                    .w(Theme::sidebar_width())
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .bg(Theme::surface())
-                            .rounded(Theme::radius_panel())
-                            .p(px(10.))
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(2.))
-                                    .flex_1()
-                                    .child(nav_item(
-                                        Some("icons/arrow-left.svg"),
-                                        t.nav_back,
-                                        false,
-                                        move |_, _, cx| {
-                                            state_back.update(cx, |s, cx| {
-                                                s.set_route(Route::Account, cx)
-                                            });
-                                        },
-                                    ))
-                                    .child(nav_item(
-                                        Some("icons/shirt.svg"),
-                                        t.skin,
-                                        active_skin,
-                                        move |_, _, cx| {
-                                            state_skin.update(cx, |s, cx| {
-                                                s.set_route(Route::Skin { tab: SkinTab::Skin }, cx);
-                                            });
-                                        },
-                                    ))
-                                    .child(nav_item(
-                                        Some("icons/rocket.svg"),
-                                        t.launcher,
-                                        active_launcher,
-                                        move |_, _, cx| {
-                                            state_launcher.update(cx, |s, cx| {
-                                                s.set_route(
-                                                    Route::Skin {
-                                                        tab: SkinTab::Launcher,
-                                                    },
-                                                    cx,
-                                                );
-                                            });
-                                        },
-                                    )),
-                            )
-                            .child(nav_item_styled(
-                                Some("icons/log-out.svg"),
-                                t.nav_logout,
+        rsx! {
+            <div flex gap={Theme::panel_gap()} p={Theme::screen_pad()} size_full bg={Theme::bg()}>
+                <div
+                    flex
+                    flex_col
+                    gap={Theme::sidebar_gap()}
+                    flex_shrink_0
+                    w={Theme::sidebar_width()}
+                >
+                    <div flex flex_col flex_1 bg={Theme::surface()} rounded={Theme::radius_panel()} p={px(10.)}>
+                        <div flex flex_col gap={px(2.)} flex_1>
+                            {nav_item(
+                                Some("icons/arrow-left.svg"),
+                                t.nav_back,
                                 false,
-                                true,
                                 move |_, _, cx| {
-                                    state_logout.update(cx, |s, cx| s.logout(cx));
+                                    state_back.update(cx, |s, cx| {
+                                        s.set_route(Route::Account, cx)
+                                    });
                                 },
-                            )),
-                    )
-                    .child(self.user_bar.clone()),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w(px(0.))
-                    .h_full()
-                    .bg(Theme::surface())
-                    .rounded(Theme::radius_panel())
-                    .overflow_hidden()
-                    .child(match self.tab {
-                        SkinTab::Skin => div()
-                            .flex()
-                            .size_full()
-                            .child(self.skin_form.clone())
-                            .child(self.placeholder.clone())
-                            .into_any_element(),
-                        SkinTab::Launcher => div()
-                            .flex()
-                            .size_full()
-                            .child(crate::views::skin::launcher_settings::launcher_settings(
-                                &self.state,
-                                data_dir.clone(),
-                                close_to_tray,
-                            ))
-                            // 40% spacer mirrors the skin preview pane so the
-                            // settings inputs land at the same width as skin inputs.
-                            .child(div().w(relative(0.3)).flex_shrink_0())
-                            .into_any_element(),
-                    }),
-            )
+                            )}
+                            {nav_item(
+                                Some("icons/shirt.svg"),
+                                t.skin,
+                                active_skin,
+                                move |_, _, cx| {
+                                    state_skin.update(cx, |s, cx| {
+                                        s.set_route(Route::Skin { tab: SkinTab::Skin }, cx);
+                                    });
+                                },
+                            )}
+                            {nav_item(
+                                Some("icons/rocket.svg"),
+                                t.launcher,
+                                active_launcher,
+                                move |_, _, cx| {
+                                    state_launcher.update(cx, |s, cx| {
+                                        s.set_route(
+                                            Route::Skin {
+                                                tab: SkinTab::Launcher,
+                                            },
+                                            cx,
+                                        );
+                                    });
+                                },
+                            )}
+                        </div>
+                        {nav_item_styled(
+                            Some("icons/log-out.svg"),
+                            t.nav_logout,
+                            false,
+                            true,
+                            move |_, _, cx| {
+                                state_logout.update(cx, |s, cx| s.logout(cx));
+                            },
+                        )}
+                    </div>
+                    {self.user_bar.clone()}
+                </div>
+                <div
+                    flex_1
+                    min_w={px(0.)}
+                    h_full
+                    bg={Theme::surface()}
+                    rounded={Theme::radius_panel()}
+                    overflow_hidden
+                >
+                    {match self.tab {
+                        SkinTab::Skin => rsx! {
+                            <div flex size_full>
+                                {self.skin_form.clone()}
+                                {self.placeholder.clone()}
+                            </div>
+                        }
+                        .into_any_element(),
+                        SkinTab::Launcher => rsx! {
+                            <div flex size_full>
+                                {crate::views::skin::launcher_settings::launcher_settings(
+                                    &self.state,
+                                    data_dir.clone(),
+                                    close_to_tray,
+                                )}
+                                // 40% spacer mirrors the skin preview pane so the
+                                // settings inputs land at the same width as skin inputs.
+                                <div w={relative(0.3)} flex_shrink_0 />
+                            </div>
+                        }
+                        .into_any_element(),
+                    }}
+                </div>
+            </div>
+        }
     }
 }
 

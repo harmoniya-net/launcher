@@ -1,4 +1,5 @@
 use gpui::{AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Window, div, px};
+use rsx::rsx;
 
 use crate::state::AppState;
 use crate::theme::Theme;
@@ -44,18 +45,15 @@ impl Render for RightPanel {
             .min_h(px(0.))
             .flex()
             .gap(Theme::panel_gap())
-            .child(div().flex_1().min_w(px(0.)).min_h(px(0.)).child(self.description.clone()));
+            .child(rsx! {
+                <div flex_1 min_w={px(0.)} min_h={px(0.)}>{self.description.clone()}</div>
+            });
 
         // The news block is per-modpack, so only show it once one is selected.
         if has_modpack {
-            bottom = bottom.child(
-                div()
-                    .w(px(280.))
-                    .flex_shrink_0()
-                    .min_h(px(0.))
-                    .flex()
-                    .child(self.news.clone()),
-            );
+            bottom = bottom.child(rsx! {
+                <div w={px(280.)} flex_shrink_0 min_h={px(0.)} flex>{self.news.clone()}</div>
+            });
         }
 
         root.child(bottom)

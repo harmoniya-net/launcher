@@ -6,6 +6,7 @@ use gpui::{
 use crate::state::AppState;
 use crate::theme::Theme;
 use crate::views::skin::viewer::SkinViewer;
+use rsx::rsx;
 
 pub struct Placeholder {
     _state: Entity<AppState>,
@@ -24,15 +25,19 @@ impl Render for Placeholder {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         // 40% of the skin pane so the form (and its inputs) take ~60% —
         // matching the launcher settings tab.
-        div()
-            .w(relative(0.4))
-            .flex_shrink_0()
-            .h_full()
-            .bg(Theme::surface())
-            .flex()
-            .flex_col()
-            .items_center()
-            .pt(px(56.))
-            .child(self.viewer.clone())
+        rsx! {
+            <div
+                w={relative(0.4)}
+                flex_shrink_0
+                h_full
+                bg={Theme::surface()}
+                flex
+                flex_col
+                items_center
+                pt={px(56.)}
+            >
+                {self.viewer.clone()}
+            </div>
+        }
     }
 }

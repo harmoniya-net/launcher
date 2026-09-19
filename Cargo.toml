@@ -86,6 +86,7 @@ image = { workspace = true }
 harmoniya-api = { path = "crates/harmoniya-api" }
 harmoniya-launch = { path = "crates/harmoniya-launch" }
 mc-skin = { path = "crates/mc-skin" }
+rsx = { path = "crates/rsx" }
 
 # App-only dependencies.
 single-instance = "0.3"

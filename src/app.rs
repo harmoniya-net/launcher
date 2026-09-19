@@ -11,6 +11,7 @@ use crate::views::{
     login::LoginView,
     skin::SkinView,
 };
+use rsx::rsx;
 
 pub struct Root {
     state: Entity<AppState>,
@@ -104,7 +105,7 @@ impl Render for Root {
             style: FontStyle::Normal,
         };
 
-        let root = div().relative().size_full().bg(Theme::bg()).text_color(Theme::text()).font(font);
+        let root = rsx! { <div relative size_full bg={Theme::bg()} text_color={Theme::text()} font={font} /> };
 
         // An in-progress self-update takes over the whole window.
         if let Some(phase) = updating {

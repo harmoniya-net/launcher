@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use gpui::{App, Context, Entity, InteractiveElement, IntoElement, ParentElement, Render, StatefulInteractiveElement, Styled, Window, div, px};
+use rsx::rsx;
 
 use crate::state::AppState;
 use crate::widgets::{markdown, modal::{Modal, OnClose}};
@@ -22,12 +23,11 @@ impl Render for NewsModal {
         let body = self.state.read(cx).news_modal_body.clone().unwrap_or_default();
         let on_close = self.on_close.clone();
 
-        let content = div()
-            .id("news-modal-scroll")
-            .flex_1()
-            .overflow_y_scroll()
-            .p(px(24.))
-            .child(markdown::render(&body));
+        let content = rsx! {
+            <div id="news-modal-scroll" flex_1 overflow_y_scroll p={px(24.)}>
+                {markdown::render(&body)}
+            </div>
+        };
 
         Modal::new(content)
             .title(crate::i18n::t().news_modal_title)

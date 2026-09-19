@@ -11,6 +11,7 @@ use gpui::{
     div, px, Entity, FontWeight, InteractiveElement, IntoElement, MouseButton, ParentElement,
     Styled,
 };
+use rsx::rsx;
 
 use crate::i18n::{self, Lang};
 use crate::state::AppState;
@@ -20,12 +21,13 @@ use crate::theme::Theme;
 /// active UI language on click.
 pub fn language_switcher(state: &Entity<AppState>) -> gpui::AnyElement {
     let current = i18n::current();
-    div()
-        .flex()
-        .gap(px(8.))
-        .child(lang_chip("lang-uk", "Українська", Lang::Uk, current == Lang::Uk, state))
-        .child(lang_chip("lang-en", "English", Lang::En, current == Lang::En, state))
-        .into_any_element()
+    rsx! {
+        <div flex gap={px(8.)}>
+            {lang_chip("lang-uk", "Українська", Lang::Uk, current == Lang::Uk, state)}
+            {lang_chip("lang-en", "English", Lang::En, current == Lang::En, state)}
+        </div>
+    }
+    .into_any_element()
 }
 
 /// A minimal text toggle: the two language names with a faint dot between them.
@@ -33,14 +35,14 @@ pub fn language_switcher(state: &Entity<AppState>) -> gpui::AnyElement {
 /// a quiet footer control rather than a settings field.
 pub fn language_toggle(state: &Entity<AppState>) -> gpui::AnyElement {
     let current = i18n::current();
-    div()
-        .flex()
-        .items_center()
-        .gap(px(10.))
-        .child(lang_text("lang-uk-min", "Українська", Lang::Uk, current == Lang::Uk, state))
-        .child(div().w(px(3.)).h(px(3.)).rounded_full().bg(Theme::text_faint()))
-        .child(lang_text("lang-en-min", "English", Lang::En, current == Lang::En, state))
-        .into_any_element()
+    rsx! {
+        <div flex items_center gap={px(10.)}>
+            {lang_text("lang-uk-min", "Українська", Lang::Uk, current == Lang::Uk, state)}
+            <div w={px(3.)} h={px(3.)} rounded_full bg={Theme::text_faint()} />
+            {lang_text("lang-en-min", "English", Lang::En, current == Lang::En, state)}
+        </div>
+    }
+    .into_any_element()
 }
 
 fn lang_chip(
@@ -50,15 +52,19 @@ fn lang_chip(
     active: bool,
     state: &Entity<AppState>,
 ) -> gpui::AnyElement {
-    let chip = div()
-        .px(px(14.))
-        .py(px(7.))
-        .rounded(Theme::radius_block())
-        .text_size(px(13.))
-        .font_weight(FontWeight::SEMIBOLD)
-        .bg(if active { Theme::accent() } else { Theme::surface_raised() })
-        .text_color(if active { Theme::on_accent() } else { Theme::text() })
-        .child(label);
+    let chip = rsx! {
+        <div
+            px={px(14.)}
+            py={px(7.)}
+            rounded={Theme::radius_block()}
+            text_size={px(13.)}
+            font_weight={FontWeight::SEMIBOLD}
+            bg={if active { Theme::accent() } else { Theme::surface_raised() }}
+            text_color={if active { Theme::on_accent() } else { Theme::text() }}
+        >
+            {label}
+        </div>
+    };
     if active {
         return chip.into_any_element();
     }
@@ -79,11 +85,15 @@ fn lang_text(
     active: bool,
     state: &Entity<AppState>,
 ) -> gpui::AnyElement {
-    let item = div()
-        .text_size(px(13.))
-        .font_weight(if active { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM })
-        .text_color(if active { Theme::text() } else { Theme::text_faint() })
-        .child(label);
+    let item = rsx! {
+        <div
+            text_size={px(13.)}
+            font_weight={if active { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM }}
+            text_color={if active { Theme::text() } else { Theme::text_faint() }}
+        >
+            {label}
+        </div>
+    };
     if active {
         return item.into_any_element();
     }

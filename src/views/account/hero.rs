@@ -1,13 +1,14 @@
 use gpui::{
     Context, Entity, ImageSource, InteractiveElement, IntoElement, MouseButton, ObjectFit,
     ParentElement, Render, Styled, StyledImage, Window, div, hsla, img, linear_color_stop,
-    linear_gradient, px,
+    linear_gradient, prelude::FluentBuilder, px,
 };
 
 use crate::state::{ActiveModal, AppState};
 use crate::theme::Theme;
 use crate::views::account::play_button::{PlayState, play_button};
 use crate::widgets::icon::icon;
+use rsx::rsx;
 
 pub struct Hero {
     state: Entity<AppState>,
@@ -27,18 +28,22 @@ impl Hero {
 
 /// A round-cornered icon button for the bottom toolbar (settings, favourite).
 fn tool_icon(id: &'static str, svg: &'static str) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .flex()
-        .items_center()
-        .justify_center()
-        .w(px(44.))
-        .h(px(44.))
-        .rounded(Theme::radius_card())
-        .text_color(Theme::text())
-        .cursor_pointer()
-        .hover(|s| s.bg(hsla(0., 0., 1., 0.16)))
-        .child(icon(svg, 20., Theme::text()))
+    rsx! {
+        <div
+            id={id}
+            flex
+            items_center
+            justify_center
+            w={px(44.)}
+            h={px(44.)}
+            rounded={Theme::radius_card()}
+            text_color={Theme::text()}
+            cursor_pointer
+            hover={|s| s.bg(hsla(0., 0., 1., 0.16))}
+        >
+            {icon(svg, 20., Theme::text())}
+        </div>
+    }
 }
 
 impl Render for Hero {
@@ -118,21 +123,25 @@ impl Render for Hero {
         let fav_icon = if fav_active { "icons/star-filled.svg" } else { "icons/star.svg" };
         let fav_handle = self.state.clone();
         let fav_id = modpack.id.clone();
-        let favourite_btn = div()
-            .id("hero-favourite")
-            .flex()
-            .items_center()
-            .justify_center()
-            .w(px(44.))
-            .h(px(44.))
-            .rounded(Theme::radius_card())
-            .text_color(fav_color)
-            .cursor_pointer()
-            .hover(|s| s.bg(hsla(0., 0., 1., 0.16)))
-            .child(icon(fav_icon, 20., fav_color))
-            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                fav_handle.update(cx, |s, cx| s.toggle_favourite(fav_id.clone(), cx));
-            });
+        let favourite_btn = rsx! {
+            <div
+                id="hero-favourite"
+                flex
+                items_center
+                justify_center
+                w={px(44.)}
+                h={px(44.)}
+                rounded={Theme::radius_card()}
+                text_color={fav_color}
+                cursor_pointer
+                hover={|s| s.bg(hsla(0., 0., 1., 0.16))}
+                on_mouse_down={MouseButton::Left, move |_, _, cx| {
+                    fav_handle.update(cx, |s, cx| s.toggle_favourite(fav_id.clone(), cx));
+                }}
+            >
+                {icon(fav_icon, 20., fav_color)}
+            </div>
+        };
         let settings_btn = tool_icon("hero-settings", "icons/settings.svg").on_mouse_down(
             MouseButton::Left,
             move |_, _, cx| {
@@ -140,63 +149,60 @@ impl Render for Hero {
             },
         );
 
-        let toolbar = div()
-            .w_full()
-            .flex()
-            .items_center()
-            .justify_between()
-            .px(px(20.))
-            .py(px(9.))
-            .child(play_btn)
-            .child(div().flex().items_center().gap(px(8.)).child(favourite_btn).child(settings_btn));
+        let toolbar = rsx! {
+            <div w_full flex items_center justify_between px={px(20.)} py={px(9.)}>
+                {play_btn}
+                <div flex items_center gap={px(8.)}>
+                    {favourite_btn}
+                    {settings_btn}
+                </div>
+            </div>
+        };
 
-        let mut hero = div()
-            .relative()
-            .flex_shrink_0()
-            .w_full()
-            .h(px(220.))
-            .bg(Theme::surface())
-            .rounded(Theme::radius_panel())
-            .overflow_hidden();
-
-        if let Some(url) = banner_url {
-            let source: ImageSource = match cached_banner {
-                Some(arc) => arc.into(),
-                None => url.into(),
-            };
-            hero = hero.child(
-                img(source)
-                    .object_fit(ObjectFit::Cover)
-                    .absolute()
-                    .inset_0()
-                    .size_full(),
-            );
+        rsx! {
+            <div
+                relative
+                flex_shrink_0
+                w_full
+                h={px(220.)}
+                bg={Theme::surface()}
+                rounded={Theme::radius_panel()}
+                overflow_hidden
+                when_some={banner_url, |hero, url| {
+                    let source: ImageSource = match cached_banner {
+                        Some(arc) => arc.into(),
+                        None => url.into(),
+                    };
+                    hero.child(
+                        img(source)
+                            .object_fit(ObjectFit::Cover)
+                            .absolute()
+                            .inset_0()
+                            .size_full(),
+                    )
+                }}
+            >
+                // Dark fade rising from the bottom so the title + toolbar stay legible.
+                // No rounding: it sits over the (square) banner and would otherwise show
+                // a rounded dark corner where the banner is sharp.
+                <div
+                    absolute
+                    inset_0
+                    bg={linear_gradient(
+                        180.,
+                        linear_color_stop(hsla(0., 0., 0., 0.0), 0.05),
+                        linear_color_stop(hsla(0., 0., 0., 0.85), 1.0),
+                    )}
+                />
+                <div absolute inset_0 flex flex_col justify_end>
+                    {toolbar}
+                </div>
+                // Round the (square) Cover banner the same way the login hero does:
+                // bg-coloured concave masks over the corners. Added last so they sit on
+                // top of the banner, gradient, and toolbar.
+                {..crate::widgets::corner_mask::corner_masks(Theme::radius_panel())}
+            </div>
         }
-        // Dark fade rising from the bottom so the title + toolbar stay legible.
-        // No rounding: it sits over the (square) banner and would otherwise show
-        // a rounded dark corner where the banner is sharp.
-        hero = hero.child(
-            div().absolute().inset_0().bg(linear_gradient(
-                180.,
-                linear_color_stop(hsla(0., 0., 0., 0.0), 0.05),
-                linear_color_stop(hsla(0., 0., 0., 0.85), 1.0),
-            )),
-        );
-
-        hero = hero.child(
-            div()
-                .absolute()
-                .inset_0()
-                .flex()
-                .flex_col()
-                .justify_end()
-                .child(toolbar),
-        );
-
-        // Round the (square) Cover banner the same way the login hero does:
-        // bg-coloured concave masks over the corners. Added last so they sit on
-        // top of the banner, gradient, and toolbar.
-        hero.children(crate::widgets::corner_mask::corner_masks(Theme::radius_panel()))
-            .into_any_element()
+        .into_any_element()
     }
 }

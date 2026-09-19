@@ -1,4 +1,5 @@
 use gpui::{AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Window, div, px};
+use rsx::rsx;
 
 use crate::state::AppState;
 use crate::theme::Theme;
@@ -33,23 +34,14 @@ impl AccountView {
 
 impl Render for AccountView {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .flex()
-            .gap(Theme::panel_gap())
-            .p(Theme::screen_pad())
-            .size_full()
-            .bg(Theme::bg())
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(Theme::sidebar_gap())
-                    .flex_shrink_0()
-                    .w(Theme::sidebar_width())
-                    .h_full()
-                    .child(div().flex_1().min_h(px(0.)).child(self.server_list.clone()))
-                    .child(self.user_bar.clone()),
-            )
-            .child(div().flex_1().min_w(px(0.)).h_full().child(self.right_panel.clone()))
+        rsx! {
+            <div flex gap={Theme::panel_gap()} p={Theme::screen_pad()} size_full bg={Theme::bg()}>
+                <div flex flex_col gap={Theme::sidebar_gap()} flex_shrink_0 w={Theme::sidebar_width()} h_full>
+                    <div flex_1 min_h={px(0.)}>{self.server_list.clone()}</div>
+                    {self.user_bar.clone()}
+                </div>
+                <div flex_1 min_w={px(0.)} h_full>{self.right_panel.clone()}</div>
+            </div>
+        }
     }
 }

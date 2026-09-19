@@ -8,6 +8,7 @@ use harmoniya_api::services::modpacks::ModpackAnnouncement;
 use crate::state::AppState;
 use crate::theme::Theme;
 use crate::widgets::icon::icon;
+use rsx::rsx;
 
 pub struct NewsPanel { state: Entity<AppState> }
 
@@ -29,65 +30,72 @@ impl Render for NewsPanel {
         let state = self.state.clone();
 
         let body = if items.is_empty() {
-            div()
-                .flex_1()
-                .flex()
-                .items_center()
-                .justify_center()
-                .px(px(16.))
-                .py(px(24.))
-                .text_size(px(13.))
-                .text_color(Theme::text_faint())
-                .child(crate::i18n::t().no_news)
-                .into_any_element()
+            rsx! {
+                <div
+                    flex_1
+                    flex
+                    items_center
+                    justify_center
+                    px={px(16.)}
+                    py={px(24.)}
+                    text_size={px(13.)}
+                    text_color={Theme::text_faint()}
+                >
+                    {crate::i18n::t().no_news}
+                </div>
+            }
+            .into_any_element()
         } else {
-            div()
-                .id("news-scroll")
-                .flex()
-                .flex_col()
-                .gap(px(2.))
-                .flex_1()
-                .min_h(px(0.))
-                .p(px(8.))
-                .overflow_y_scroll()
-                .children(
-                    items
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, a)| news_item(a, &state, i)),
-                )
-                .into_any_element()
+            rsx! {
+                <div
+                    id="news-scroll"
+                    flex
+                    flex_col
+                    gap={px(2.)}
+                    flex_1
+                    min_h={px(0.)}
+                    p={px(8.)}
+                    overflow_y_scroll
+                >
+                    {..items.into_iter().enumerate().map(|(i, a)| news_item(a, &state, i))}
+                </div>
+            }
+            .into_any_element()
         };
 
-        div()
-            .flex()
-            .flex_1()
-            .h_full()
-            .min_w(px(0.))
-            .min_h(px(0.))
-            .flex_col()
-            .bg(Theme::surface())
-            .rounded(Theme::radius_panel())
-            .overflow_hidden()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .px(px(24.))
-                    .py(px(14.))
-                    .border_b_1()
-                    .border_color(Theme::surface_raised())
-                    .child(icon("icons/newspaper.svg", 14., Theme::text_faint()))
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(Theme::text_faint())
-                            .child(crate::i18n::t().news_header),
-                    ),
-            )
-            .child(body)
+        rsx! {
+            <div
+                flex
+                flex_1
+                h_full
+                min_w={px(0.)}
+                min_h={px(0.)}
+                flex_col
+                bg={Theme::surface()}
+                rounded={Theme::radius_panel()}
+                overflow_hidden
+            >
+                <div
+                    flex
+                    items_center
+                    gap={px(8.)}
+                    px={px(24.)}
+                    py={px(14.)}
+                    border_b_1
+                    border_color={Theme::surface_raised()}
+                >
+                    {icon("icons/newspaper.svg", 14., Theme::text_faint())}
+                    <div
+                        text_size={px(12.)}
+                        font_weight={FontWeight::BOLD}
+                        text_color={Theme::text_faint()}
+                    >
+                        {crate::i18n::t().news_header}
+                    </div>
+                </div>
+                {body}
+            </div>
+        }
     }
 }
 
@@ -102,54 +110,54 @@ fn news_item(a: ModpackAnnouncement, state: &Entity<AppState>, idx: usize) -> gp
     let state = state.clone();
     let id = SharedString::from(format!("news-{idx}"));
 
-    let date_row = div()
-        .flex()
-        .items_center()
-        .justify_between()
-        .gap(px(8.))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(5.))
-                .child(icon("icons/clock.svg", 11., Theme::text_muted()))
-                .child(
-                    div()
-                        .text_size(px(11.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(Theme::text_muted())
-                        .child(date_label),
-                ),
-        )
-        .child(icon("icons/arrow-up-right.svg", 14., Theme::text_faint()));
+    let date_row = rsx! {
+        <div flex items_center justify_between gap={px(8.)}>
+            <div flex items_center gap={px(5.)}>
+                {icon("icons/clock.svg", 11., Theme::text_muted())}
+                <div
+                    text_size={px(11.)}
+                    font_weight={FontWeight::SEMIBOLD}
+                    text_color={Theme::text_muted()}
+                >
+                    {date_label}
+                </div>
+            </div>
+            {icon("icons/arrow-up-right.svg", 14., Theme::text_faint())}
+        </div>
+    };
 
-    let mut item = div()
-        .id(id)
-        .flex()
-        .flex_col()
-        .flex_shrink_0()
+    // `crate::widgets::emoji::line` isn't a bare-tag element constructor (it
+    // takes args), so its chains are built as plain Rust and spliced in below.
+    let title_line = crate::widgets::emoji::line(&title, 14.)
         .w_full()
-        .gap(px(4.))
-        .p(px(10.))
-        .rounded(Theme::radius_card())
-        .cursor_pointer()
-        .hover(|s| s.bg(Theme::surface_raised()))
-        .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-            state.update(cx, |s, cx| s.open_news(body.clone(), cx));
-        })
-        .child(date_row)
-        .child(
-            crate::widgets::emoji::line(&title, 14.)
-                .w_full()
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(Theme::text()),
-        );
-    if !excerpt.is_empty() {
-        item = item.child(
-            crate::widgets::emoji::line(&excerpt, 12.).w_full().text_color(Theme::text_faint()),
-        );
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(Theme::text());
+    let excerpt_line = (!excerpt.is_empty()).then(|| {
+        crate::widgets::emoji::line(&excerpt, 12.).w_full().text_color(Theme::text_faint())
+    });
+
+    rsx! {
+        <div
+            id={id}
+            flex
+            flex_col
+            flex_shrink_0
+            w_full
+            gap={px(4.)}
+            p={px(10.)}
+            rounded={Theme::radius_card()}
+            cursor_pointer
+            hover={|s| s.bg(Theme::surface_raised())}
+            on_mouse_down={MouseButton::Left, move |_, _, cx| {
+                state.update(cx, |s, cx| s.open_news(body.clone(), cx));
+            }}
+        >
+            {date_row}
+            {title_line}
+            {..excerpt_line}
+        </div>
     }
-    item.into_any_element()
+    .into_any_element()
 }
 
 fn truncate(s: &str, max_chars: usize) -> String {

@@ -12,6 +12,7 @@ use harmoniya_api::services::modpacks::Modpack;
 use crate::theme::Theme;
 
 use super::card_anim::CardFrame;
+use rsx::rsx;
 
 /// Overscan (in px) by which the bottom shadow extends past the card's bottom
 /// edge. The card height is animated on the card element while the shadow is an
@@ -48,23 +49,26 @@ pub fn server_card(
         .map(|u| crate::banner::at_size(u, 816, 400));
 
     let text_color = if active || hovered { Theme::text() } else { Theme::text_faint() };
-    let mut card = div()
-        .id(("server-card", hash_id(&id)))
-        .relative()
-        .flex()
-        .flex_col()
-        .justify_between()
-        .flex_shrink_0()
-        .w_full()
-        .px(px(20.))
-        .py(px(16.))
-        .rounded(Theme::radius_card())
-        .bg(if active { Theme::surface_raised() } else { Theme::surface() })
-        .text_color(text_color)
-        .cursor_pointer()
-        .overflow_hidden()
-        .on_hover(on_hover)
-        .on_mouse_down(MouseButton::Left, on_select);
+    let mut card = rsx! {
+        <div
+            id={("server-card", hash_id(&id))}
+            relative
+            flex
+            flex_col
+            justify_between
+            flex_shrink_0
+            w_full
+            px={px(20.)}
+            py={px(16.)}
+            rounded={Theme::radius_card()}
+            bg={if active { Theme::surface_raised() } else { Theme::surface() }}
+            text_color={text_color}
+            cursor_pointer
+            overflow_hidden
+            on_hover={on_hover}
+            on_mouse_down={MouseButton::Left, on_select}
+        />
+    };
 
     if let Some(url) = banner_url {
         // Prefer pre-fetched bytes if available; otherwise hand GPUI the URL
@@ -90,100 +94,76 @@ pub fn server_card(
         let dark = hsla(0.0, 0.0, 0.0, 1.0);
         let band_h = (target_h * 0.9).max(80.0);
 
-        let top_band = div()
-            .absolute()
-            .top_0()
-            .left_0()
-            .right_0()
-            .h(px(band_h))
-            .bg(linear_gradient(
-                180.0,
-                linear_color_stop(dark, 0.0).opacity(top_alpha),
-                linear_color_stop(dark, 1.0).opacity(0.0),
-            ));
+        let top_band = rsx! {
+            <div
+                absolute
+                top_0
+                left_0
+                right_0
+                h={px(band_h)}
+                bg={linear_gradient(
+                    180.0,
+                    linear_color_stop(dark, 0.0).opacity(top_alpha),
+                    linear_color_stop(dark, 1.0).opacity(0.0),
+                )}
+            />
+        };
 
         // Bottom inner-shadow band built at full strength; the (caller-eased)
         // element opacity carries the alpha so the scrim lightens on hover/active.
-        let bottom_band = div()
-            .absolute()
-            .bottom(px(-SEAM_OVERSCAN))
-            .left_0()
-            .right_0()
-            .h(px(band_h + SEAM_OVERSCAN))
-            .bg(linear_gradient(
-                0.0,
-                linear_color_stop(dark, 0.0),
-                linear_color_stop(dark, 1.0).opacity(0.0),
-            ))
-            .opacity(shadow_opacity);
+        let bottom_band = rsx! {
+            <div
+                absolute
+                bottom={px(-SEAM_OVERSCAN)}
+                left_0
+                right_0
+                h={px(band_h + SEAM_OVERSCAN)}
+                bg={linear_gradient(
+                    0.0,
+                    linear_color_stop(dark, 0.0),
+                    linear_color_stop(dark, 1.0).opacity(0.0),
+                )}
+                opacity={shadow_opacity}
+            />
+        };
 
         card = card.child(top_band).child(bottom_band);
     }
 
     let built = card
-        .child(
-            div()
-                .relative()
-                .flex()
-                .flex_col()
-                .gap(px(8.))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .child(
-                            div()
-                                .text_size(px(16.))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(text_color)
-                                .child(m.title.clone()),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(13.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(text_color)
-                                .child(m.version.unwrap_or_default()),
-                        ),
-                )
-                .child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(text_color)
-                        .child(m.summary.unwrap_or_default()),
-                ),
-        )
-        .child(
-            div()
-                .relative()
-                .flex()
-                .justify_end()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(6.))
-                        .px(px(10.))
-                        .py(px(6.))
-                        .rounded(Theme::radius_block())
-                        .bg(Theme::on_accent())
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(Theme::text_muted())
-                                .child(status.text),
-                        )
-                        .child(
-                            div()
-                                .w(px(7.))
-                                .h(px(7.))
-                                .rounded_full()
-                                .bg(status.color),
-                        ),
-                ),
-        );
+        .child(rsx! {
+            <div relative flex flex_col gap={px(8.)}>
+                <div flex items_center justify_between>
+                    <div text_size={px(16.)} font_weight={FontWeight::SEMIBOLD} text_color={text_color}>
+                        {m.title.clone()}
+                    </div>
+                    <div text_size={px(13.)} font_weight={FontWeight::MEDIUM} text_color={text_color}>
+                        {m.version.unwrap_or_default()}
+                    </div>
+                </div>
+                <div text_size={px(13.)} text_color={text_color}>
+                    {m.summary.unwrap_or_default()}
+                </div>
+            </div>
+        })
+        .child(rsx! {
+            <div relative flex justify_end>
+                <div
+                    flex
+                    items_center
+                    gap={px(6.)}
+                    px={px(10.)}
+                    py={px(6.)}
+                    rounded={Theme::radius_block()}
+                    bg={Theme::on_accent()}
+                >
+                    <div text_size={px(12.)} font_weight={FontWeight::SEMIBOLD} text_color={Theme::text_muted()}>
+                        {status.text}
+                    </div>
+                    <div w={px(7.)} h={px(7.)} rounded_full bg={status.color} />
+                </div>
+            </div>
+        });
 
     // Round the (square) Cover banner the same way the hero does: gpui can't
     // clip a Cover image to a rounded rect, so overlay bg-coloured concave masks

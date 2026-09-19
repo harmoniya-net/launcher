@@ -23,6 +23,7 @@ use image::{Frame, RgbaImage};
 use harmoniya_api::services::yggdrasil::SkinModel;
 use crate::state::AppState;
 use crate::theme::Theme;
+use rsx::rsx;
 
 /// Output footprint (matches the rasterizer's fixed render size).
 const W: f32 = mc_skin::WIDTH as f32;
@@ -379,38 +380,35 @@ impl Render for SkinViewer {
             });
         }
 
-        let mut wrapper = div()
-            .id("skin-viewer")
-            .w(px(W + DRAG_PAD_X))
-            .h(px(H + DRAG_PAD_Y))
-            .flex()
-            .flex_col()
-            .items_center()
-            .mt(px(32.))
-            .gap(px(8.))
-            .cursor(gpui::CursorStyle::OpenHand);
-
-        wrapper = wrapper.on_mouse_down(
-            MouseButton::Left,
-            cx.listener(|this, e: &MouseDownEvent, _, cx| {
-                this.drag = Some((e.position, this.yaw, this.pitch));
-                cx.notify();
-            }),
-        );
-
-        let label = div()
-            .text_size(px(11.))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(Theme::text_faint())
-            .child(crate::i18n::t().drag_to_rotate);
-
         // Always occupy the model's footprint — reserve the box before the first
         // frame renders so the label below doesn't jump when the image appears.
-        if let Some(image) = &self.rendered {
-            wrapper = wrapper.child(img(image.clone()).w(px(W)).h(px(H)));
+        let content: gpui::AnyElement = if let Some(image) = &self.rendered {
+            img(image.clone()).w(px(W)).h(px(H)).into_any_element()
         } else {
-            wrapper = wrapper.child(div().w(px(W)).h(px(H)));
+            div().w(px(W)).h(px(H)).into_any_element()
+        };
+
+        rsx! {
+            <div
+                id="skin-viewer"
+                w={px(W + DRAG_PAD_X)}
+                h={px(H + DRAG_PAD_Y)}
+                flex
+                flex_col
+                items_center
+                mt={px(32.)}
+                gap={px(8.)}
+                cursor={gpui::CursorStyle::OpenHand}
+                on_mouse_down={MouseButton::Left, cx.listener(|this, e: &MouseDownEvent, _, cx| {
+                    this.drag = Some((e.position, this.yaw, this.pitch));
+                    cx.notify();
+                })}
+            >
+                {content}
+                <div text_size={px(11.)} font_weight={FontWeight::MEDIUM} text_color={Theme::text_faint()}>
+                    {crate::i18n::t().drag_to_rotate}
+                </div>
+            </div>
         }
-        wrapper.child(label)
     }
 }

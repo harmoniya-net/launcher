@@ -19,6 +19,7 @@ use super::card_anim::{
     ease_in_out, target_height,
 };
 use super::server_card::server_card;
+use rsx::rsx;
 
 pub struct ServerList {
     state: Entity<AppState>,
@@ -95,127 +96,130 @@ impl ServerList {
             H_NORMAL * count as f32 + CARD_GAP * (count as f32 - 1.0)
         };
 
-        let cards = div().flex().flex_col().gap(px(CARD_GAP)).h(px(group_content_h)).overflow_hidden().children(
-            modpacks.into_iter().enumerate().map(|(i, m)| {
-                let active = active_idx == Some(i);
-                let is_hovered = hover_idx == Some(i);
-                let target = targets[i];
-                let now = Instant::now();
-                let prev_state = self.heights.get(&m.id).copied().unwrap_or(CardHeight {
-                    source: H_NORMAL,
-                    target: H_NORMAL,
-                    started_at: now,
-                });
-                // If target changed mid-tween, continue from the real current
-                // position rather than snapping to the previous target.
-                let curr_state = if (target - prev_state.target).abs() > f32::EPSILON {
-                    let elapsed_ms = now
-                        .saturating_duration_since(prev_state.started_at)
-                        .as_secs_f32() * 1000.0;
-                    let t = (elapsed_ms / ANIM_MS).clamp(0.0, 1.0);
-                    let eased = ease_in_out(t);
-                    let current = prev_state.source + (prev_state.target - prev_state.source) * eased;
-                    CardHeight { source: current, target, started_at: now }
-                } else {
-                    prev_state
-                };
-                self.heights.insert(m.id.clone(), curr_state);
-                let prev = curr_state.source;
+        let card_elements = modpacks.into_iter().enumerate().map(|(i, m)| {
+            let active = active_idx == Some(i);
+            let is_hovered = hover_idx == Some(i);
+            let target = targets[i];
+            let now = Instant::now();
+            let prev_state = self.heights.get(&m.id).copied().unwrap_or(CardHeight {
+                source: H_NORMAL,
+                target: H_NORMAL,
+                started_at: now,
+            });
+            // If target changed mid-tween, continue from the real current
+            // position rather than snapping to the previous target.
+            let curr_state = if (target - prev_state.target).abs() > f32::EPSILON {
+                let elapsed_ms = now
+                    .saturating_duration_since(prev_state.started_at)
+                    .as_secs_f32() * 1000.0;
+                let t = (elapsed_ms / ANIM_MS).clamp(0.0, 1.0);
+                let eased = ease_in_out(t);
+                let current = prev_state.source + (prev_state.target - prev_state.source) * eased;
+                CardHeight { source: current, target, started_at: now }
+            } else {
+                prev_state
+            };
+            self.heights.insert(m.id.clone(), curr_state);
+            let prev = curr_state.source;
 
-                // Banner + shadow targets for this state, eased over the same
-                // duration as the height tween (which is what drives the
-                // per-frame re-renders). Computed to a static opacity below; on
-                // a target change we continue from the current interpolated
-                // value so an interrupted ease doesn't jump.
-                let (banner_dst, shadow_dst) = if active {
-                    (BANNER_LIT, SHADOW_ACTIVE)
-                } else if is_hovered {
-                    (BANNER_LIT, SHADOW_HOVER)
-                } else {
-                    (BANNER_REST, SHADOW_REST)
-                };
-                let ease_at = |start: Instant| {
-                    ease_in_out(
-                        (now.saturating_duration_since(start).as_secs_f32() * 1000.0 / ANIM_MS)
-                            .clamp(0.0, 1.0),
-                    )
-                };
-                let vis = match self.visuals.get(&m.id).copied() {
-                    Some(p) if p.banner_dst == banner_dst && p.shadow_dst == shadow_dst => p,
-                    Some(p) => {
-                        let t = ease_at(p.started_at);
-                        CardVisual {
-                            banner_src: p.banner_src + (p.banner_dst - p.banner_src) * t,
-                            banner_dst,
-                            shadow_src: p.shadow_src + (p.shadow_dst - p.shadow_src) * t,
-                            shadow_dst,
-                            started_at: now,
-                        }
-                    }
-                    None => CardVisual {
-                        banner_src: banner_dst,
+            // Banner + shadow targets for this state, eased over the same
+            // duration as the height tween (which is what drives the
+            // per-frame re-renders). Computed to a static opacity below; on
+            // a target change we continue from the current interpolated
+            // value so an interrupted ease doesn't jump.
+            let (banner_dst, shadow_dst) = if active {
+                (BANNER_LIT, SHADOW_ACTIVE)
+            } else if is_hovered {
+                (BANNER_LIT, SHADOW_HOVER)
+            } else {
+                (BANNER_REST, SHADOW_REST)
+            };
+            let ease_at = |start: Instant| {
+                ease_in_out(
+                    (now.saturating_duration_since(start).as_secs_f32() * 1000.0 / ANIM_MS)
+                        .clamp(0.0, 1.0),
+                )
+            };
+            let vis = match self.visuals.get(&m.id).copied() {
+                Some(p) if p.banner_dst == banner_dst && p.shadow_dst == shadow_dst => p,
+                Some(p) => {
+                    let t = ease_at(p.started_at);
+                    CardVisual {
+                        banner_src: p.banner_src + (p.banner_dst - p.banner_src) * t,
                         banner_dst,
-                        shadow_src: shadow_dst,
+                        shadow_src: p.shadow_src + (p.shadow_dst - p.shadow_src) * t,
                         shadow_dst,
                         started_at: now,
-                    },
-                };
-                self.visuals.insert(m.id.clone(), vis);
-                let vt = ease_at(vis.started_at);
-                let banner_opacity = vis.banner_src + (vis.banner_dst - vis.banner_src) * vt;
-                let shadow_opacity = vis.shadow_src + (vis.shadow_dst - vis.shadow_src) * vt;
+                    }
+                }
+                None => CardVisual {
+                    banner_src: banner_dst,
+                    banner_dst,
+                    shadow_src: shadow_dst,
+                    shadow_dst,
+                    started_at: now,
+                },
+            };
+            self.visuals.insert(m.id.clone(), vis);
+            let vt = ease_at(vis.started_at);
+            let banner_opacity = vis.banner_src + (vis.banner_dst - vis.banner_src) * vt;
+            let shadow_opacity = vis.shadow_src + (vis.shadow_dst - vis.shadow_src) * vt;
 
-                let id = m.id.clone();
-                let banner = m
-                    .banner
-                    .as_ref()
-                    .and_then(|b| b.url.as_deref())
-                    .map(|u| crate::banner::at_size(u, 816, 400))
-                    .and_then(|url| self.state.read(cx).banner_cache.get(&url).cloned());
-                let handle = state_handle.clone();
-                let hover_id = m.id.clone();
-                let on_hover = cx.listener(move |this: &mut Self, hovered: &bool, _, cx| {
-                    let currently = this.hovered_id.as_deref() == Some(hover_id.as_str());
-                    if *hovered {
-                        if !currently {
-                            this.hovered_id = Some(hover_id.clone());
-                            cx.notify();
-                        }
-                    } else if currently {
-                        this.hovered_id = None;
+            let id = m.id.clone();
+            let banner = m
+                .banner
+                .as_ref()
+                .and_then(|b| b.url.as_deref())
+                .map(|u| crate::banner::at_size(u, 816, 400))
+                .and_then(|url| self.state.read(cx).banner_cache.get(&url).cloned());
+            let handle = state_handle.clone();
+            let hover_id = m.id.clone();
+            let on_hover = cx.listener(move |this: &mut Self, hovered: &bool, _, cx| {
+                let currently = this.hovered_id.as_deref() == Some(hover_id.as_str());
+                if *hovered {
+                    if !currently {
+                        this.hovered_id = Some(hover_id.clone());
                         cx.notify();
                     }
-                });
-                let frame = CardFrame {
-                    prev_h: prev,
-                    target_h: target,
-                    banner_opacity,
-                    shadow_opacity,
-                };
-                server_card(
-                    m,
-                    active,
-                    is_hovered,
-                    frame,
-                    banner,
-                    move |_, _, cx| {
-                        handle.update(cx, |s, cx| {
-                            s.select_modpack(Some(id.clone()), cx);
-                        });
-                    },
-                    on_hover,
-                )
-            }),
-        );
+                } else if currently {
+                    this.hovered_id = None;
+                    cx.notify();
+                }
+            });
+            let frame = CardFrame {
+                prev_h: prev,
+                target_h: target,
+                banner_opacity,
+                shadow_opacity,
+            };
+            server_card(
+                m,
+                active,
+                is_hovered,
+                frame,
+                banner,
+                move |_, _, cx| {
+                    handle.update(cx, |s, cx| {
+                        s.select_modpack(Some(id.clone()), cx);
+                    });
+                },
+                on_hover,
+            )
+        });
 
-        div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .gap(px(12.))
-            .child(header)
-            .child(cards)
-            .into_any_element()
+        let cards = rsx! {
+            <div flex flex_col gap={px(CARD_GAP)} h={px(group_content_h)} overflow_hidden>
+                {..card_elements}
+            </div>
+        };
+
+        rsx! {
+            <div flex flex_col w_full gap={px(12.)}>
+                {header}
+                {cards}
+            </div>
+        }
+        .into_any_element()
     }
 }
 
@@ -232,13 +236,9 @@ impl Render for ServerList {
         let logo_cache = state.logo_cache.clone();
         let state_handle = self.state.clone();
 
-        let mut list = div()
-            .id("server-list")
-            .flex()
-            .flex_col()
-            .gap(px(16.))
-            .size_full()
-            .overflow_y_scroll();
+        let mut list = rsx! {
+            <div id="server-list" flex flex_col gap={px(16.)} size_full overflow_y_scroll />
+        };
 
         if loading && groups.is_empty() {
             list = list.child(empty(crate::i18n::t().loading));
@@ -281,59 +281,51 @@ impl Render for ServerList {
 
 /// A project group's label: logo + uppercase project name.
 fn project_header(logo: Option<Arc<Image>>, title: String) -> AnyElement {
-    div()
-        .flex()
-        .items_center()
-        .gap(px(8.))
-        .py(px(4.))
-        .opacity(0.6)
-        .when_some(logo, |this, arc| {
-            let source: ImageSource = arc.into();
-            this.child(
-                img(source)
-                    .w(px(20.))
-                    .h(px(20.))
-                    .rounded_full()
-                    .object_fit(ObjectFit::Fill)
-                    .flex_shrink_0(),
-            )
-        })
-        .child(
-            div()
-                .text_size(px(12.))
-                .font_weight(FontWeight::BOLD)
-                .text_color(Theme::text_faint())
-                .child(title.to_uppercase()),
-        )
-        .into_any_element()
+    rsx! {
+        <div
+            flex
+            items_center
+            gap={px(8.)}
+            py={px(4.)}
+            opacity=0.6
+            when_some={logo, |this, arc| {
+                let source: ImageSource = arc.into();
+                this.child(
+                    img(source)
+                        .w(px(20.))
+                        .h(px(20.))
+                        .rounded_full()
+                        .object_fit(ObjectFit::Fill)
+                        .flex_shrink_0(),
+                )
+            }}
+        >
+            <div text_size={px(12.)} font_weight={FontWeight::BOLD} text_color={Theme::text_faint()}>
+                {title.to_uppercase()}
+            </div>
+        </div>
+    }
+    .into_any_element()
 }
 
 /// The Favourites group label: pin icon + localized "FAVOURITES".
 fn fav_header() -> AnyElement {
-    div()
-        .flex()
-        .items_center()
-        .gap(px(8.))
-        .py(px(4.))
-        .opacity(0.6)
-        .child(icon("icons/pin-filled.svg", 14., Theme::text_faint()))
-        .child(
-            div()
-                .text_size(px(12.))
-                .font_weight(FontWeight::BOLD)
-                .text_color(Theme::text_faint())
-                .child(crate::i18n::t().favourites),
-        )
-        .into_any_element()
+    rsx! {
+        <div flex items_center gap={px(8.)} py={px(4.)} opacity=0.6>
+            {icon("icons/pin-filled.svg", 14., Theme::text_faint())}
+            <div text_size={px(12.)} font_weight={FontWeight::BOLD} text_color={Theme::text_faint()}>
+                {crate::i18n::t().favourites}
+            </div>
+        </div>
+    }
+    .into_any_element()
 }
 
 fn empty(text: impl Into<gpui::SharedString>) -> gpui::AnyElement {
-    div()
-        .flex()
-        .items_center()
-        .justify_center()
-        .h(px(120.))
-        .text_color(Theme::text_faint())
-        .child(text.into())
-        .into_any_element()
+    rsx! {
+        <div flex items_center justify_center h={px(120.)} text_color={Theme::text_faint()}>
+            {text.into()}
+        </div>
+    }
+    .into_any_element()
 }

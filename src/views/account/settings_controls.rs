@@ -9,23 +9,33 @@ use gpui::{
 use harmoniya_api::services::options::{self, Choice, ModpackOptions};
 use crate::state::AppState;
 use crate::theme::Theme;
+use rsx::rsx;
 
 pub(crate) fn header_text(title: &str, subtitle: Option<&str>) -> gpui::Div {
-    let mut col = div().flex().flex_col().gap(px(2.)).child(
-        div()
-            .text_size(px(13.))
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(Theme::text())
-            .child(title.to_string()),
-    );
+    let mut col = rsx! {
+        <div flex flex_col gap={px(2.)}>
+            <div text_size={px(13.)} font_weight={FontWeight::SEMIBOLD} text_color={Theme::text()}>
+                {title.to_string()}
+            </div>
+        </div>
+    };
     if let Some(sub) = subtitle {
-        col = col.child(div().text_size(px(12.)).text_color(Theme::text_faint()).child(sub.to_string()));
+        col = col.child(rsx! {
+            <div text_size={px(12.)} text_color={Theme::text_faint()}>
+                {sub.to_string()}
+            </div>
+        });
     }
     col
 }
 
 pub(crate) fn field_card(title: &str, subtitle: Option<&str>, enabled: bool, control: gpui::AnyElement) -> gpui::AnyElement {
-    let card = div().flex().flex_col().gap(px(8.)).child(header_text(title, subtitle)).child(control);
+    let card = rsx! {
+        <div flex flex_col gap={px(8.)}>
+            {header_text(title, subtitle)}
+            {control}
+        </div>
+    };
     if enabled { card.into_any_element() } else { card.opacity(0.4).into_any_element() }
 }
 
@@ -38,18 +48,22 @@ pub(crate) fn step_btn(
     target: f64,
     enabled: bool,
 ) -> gpui::AnyElement {
-    let base = div()
-        .flex()
-        .items_center()
-        .justify_center()
-        .flex_shrink_0()
-        .w(px(28.))
-        .h(px(28.))
-        .rounded(Theme::radius_block())
-        .bg(Theme::surface_raised())
-        .text_color(Theme::text())
-        .text_size(px(16.))
-        .child(glyph);
+    let base = rsx! {
+        <div
+            flex
+            items_center
+            justify_center
+            flex_shrink_0
+            w={px(28.)}
+            h={px(28.)}
+            rounded={Theme::radius_block()}
+            bg={Theme::surface_raised()}
+            text_color={Theme::text()}
+            text_size={px(16.)}
+        >
+            {glyph}
+        </div>
+    };
     if !enabled {
         return base.into_any_element();
     }
@@ -75,17 +89,21 @@ pub(crate) fn select_control(
     enabled: bool,
 ) -> gpui::AnyElement {
     let current = saved.vars.get(name).cloned().unwrap_or_else(|| default.to_string());
-    let mut row = div().flex().flex_wrap().gap(px(8.));
+    let mut row = rsx! { <div flex flex_wrap gap={px(8.)} /> };
     for c in choices {
         let active = c.value == current;
-        let chip = div()
-            .px(px(14.))
-            .py(px(7.))
-            .rounded(Theme::radius_block())
-            .text_size(px(13.))
-            .bg(if active { Theme::accent() } else { Theme::surface_raised() })
-            .text_color(if active { Theme::on_accent() } else { Theme::text() })
-            .child(c.label.clone());
+        let chip = rsx! {
+            <div
+                px={px(14.)}
+                py={px(7.)}
+                rounded={Theme::radius_block()}
+                text_size={px(13.)}
+                bg={if active { Theme::accent() } else { Theme::surface_raised() }}
+                text_color={if active { Theme::on_accent() } else { Theme::text() }}
+            >
+                {c.label.clone()}
+            </div>
+        };
         let chip = if enabled {
             let h = handle.clone();
             let mid = modpack_id.to_string();
@@ -115,17 +133,21 @@ pub(crate) fn path_control(
 ) -> gpui::AnyElement {
     let current = saved.vars.get(name).cloned();
     let pick = {
-        let base = div()
-            .flex_shrink_0()
-            .px(px(14.))
-            .h(px(40.))
-            .flex()
-            .items_center()
-            .bg(Theme::surface_raised())
-            .text_size(px(13.))
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(Theme::text())
-            .child(crate::i18n::t().pick);
+        let base = rsx! {
+            <div
+                flex_shrink_0
+                px={px(14.)}
+                h={px(40.)}
+                flex
+                items_center
+                bg={Theme::surface_raised()}
+                text_size={px(13.)}
+                font_weight={FontWeight::SEMIBOLD}
+                text_color={Theme::text()}
+            >
+                {crate::i18n::t().pick}
+            </div>
+        };
         if enabled {
             let h = handle.clone();
             let mid = modpack_id.to_string();
@@ -148,43 +170,37 @@ pub(crate) fn path_control(
         }
     };
 
-    let mut row = div()
-        .flex()
-        .items_center()
-        .h(px(40.))
-        .bg(Theme::bg())
-        .rounded(Theme::radius_block())
-        .overflow_hidden()
-        .child(pick)
-        .child(
-            div()
-                .flex_1()
-                .px(px(14.))
-                .text_size(px(13.))
-                .text_color(Theme::text_faint())
-                .child(current.clone().unwrap_or_else(|| crate::i18n::t().not_set.into())),
-        );
+    let mut row = rsx! {
+        <div flex items_center h={px(40.)} bg={Theme::bg()} rounded={Theme::radius_block()} overflow_hidden>
+            {pick}
+            <div flex_1 px={px(14.)} text_size={px(13.)} text_color={Theme::text_faint()}>
+                {current.clone().unwrap_or_else(|| crate::i18n::t().not_set.into())}
+            </div>
+        </div>
+    };
     if enabled && current.is_some() {
         let h = handle.clone();
         let mid = modpack_id.to_string();
         let nm = name.to_string();
-        row = row.child(
-            div()
-                .id(SharedString::from(format!("path-{name}-reset")))
-                .flex_shrink_0()
-                .px(px(12.))
-                .h_full()
-                .flex()
-                .items_center()
-                .text_size(px(12.))
-                .text_color(Theme::text_faint())
-                .cursor_pointer()
-                .hover(|s| s.text_color(Theme::text()))
-                .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+        row = row.child(rsx! {
+            <div
+                id={SharedString::from(format!("path-{name}-reset"))}
+                flex_shrink_0
+                px={px(12.)}
+                h_full
+                flex
+                items_center
+                text_size={px(12.)}
+                text_color={Theme::text_faint()}
+                cursor_pointer
+                hover={|s| s.text_color(Theme::text())}
+                on_mouse_down={MouseButton::Left, move |_, _, cx| {
                     h.update(cx, |s, cx| s.set_option_value(mid.clone(), nm.clone(), None, cx));
-                })
-                .child(crate::i18n::t().reset),
-        );
+                }}
+            >
+                {crate::i18n::t().reset}
+            </div>
+        });
     }
     row.into_any_element()
 }

@@ -7,6 +7,7 @@ use harmoniya_api::auth::Provider;
 use crate::state::{AppState, LoginPhase};
 use crate::theme::Theme;
 use crate::widgets::icon::icon;
+use rsx::rsx;
 
 pub struct LoginView {
     pub state: Entity<AppState>,
@@ -156,23 +157,27 @@ fn login_button(
     icon_color: Hsla,
     on_click: impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
 ) -> gpui::AnyElement {
-    div()
-        .id(id)
-        .flex()
-        .items_center()
-        .justify_between()
-        .bg(Theme::text())
-        .rounded(Theme::radius_block())
-        .px(px(12.))
-        .py(px(8.))
-        .w_full()
-        .text_color(rgb(0x000000))
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_size(px(14.))
-        .cursor_pointer()
-        .hover(|s| s.bg(rgb(0xeeeeee)))
-        .on_mouse_down(MouseButton::Left, move |ev, w, cx| on_click(ev, w, cx))
-        .child(label)
-        .child(icon(icon_svg, 20., icon_color))
-        .into_any_element()
+    rsx! {
+        <div
+            id={id}
+            flex
+            items_center
+            justify_between
+            bg={Theme::text()}
+            rounded={Theme::radius_block()}
+            px={px(12.)}
+            py={px(8.)}
+            w_full
+            text_color={rgb(0x000000)}
+            font_weight={FontWeight::SEMIBOLD}
+            text_size={px(14.)}
+            cursor_pointer
+            hover={|s| s.bg(rgb(0xeeeeee))}
+            on_mouse_down={MouseButton::Left, move |ev, w, cx| on_click(ev, w, cx)}
+        >
+            {label}
+            {icon(icon_svg, 20., icon_color)}
+        </div>
+    }
+    .into_any_element()
 }

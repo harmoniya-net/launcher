@@ -18,6 +18,7 @@ use crate::views::account::settings_controls::{
     field_card, header_text, path_control, select_control, step_btn,
 };
 use crate::widgets::modal::{Modal, OnClose};
+use rsx::rsx;
 
 /// An in-progress slider drag: the dragged slider's binding plus its track
 /// geometry (window-space left x + width) and value mapping, frozen at
@@ -168,22 +169,27 @@ impl SettingsModal {
                 h.update(cx, |s, cx| s.set_feature(mid.clone(), nm.clone(), !on, cx));
             });
 
-        let header = div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap(px(12.))
-            .child(header_text(title, subtitle).flex_1())
-            .child(switch);
+        let header = rsx! {
+            <div flex items_center justify_between gap={px(12.)}>
+                {header_text(title, subtitle).flex_1()}
+                {switch}
+            </div>
+        };
 
-        let mut col = div().flex().flex_col().gap(px(12.)).child(header);
+        let mut col = rsx! {
+            <div flex flex_col gap={px(12.)}>
+                {header}
+            </div>
+        };
         for child in options {
             if self.field_hidden(child, cx) {
                 continue;
             }
-            col = col.child(
-                div().pl(px(12.)).child(self.field_view(modpack_id, child, saved, on, window, cx)),
-            );
+            col = col.child(rsx! {
+                <div pl={px(12.)}>
+                    {self.field_view(modpack_id, child, saved, on, window, cx)}
+                </div>
+            });
         }
         col.into_any_element()
     }
@@ -218,18 +224,22 @@ impl SettingsModal {
             value
         };
 
-        let base = div()
-            .h(px(40.))
-            .px(px(14.))
-            .flex()
-            .items_center()
-            .bg(Theme::bg())
-            .rounded(Theme::radius_block())
-            .border_1()
-            .border_color(if focused { Theme::accent() } else { Theme::surface_raised() })
-            .text_size(px(13.))
-            .text_color(if show_placeholder { Theme::text_faint() } else { Theme::text() })
-            .child(display);
+        let base = rsx! {
+            <div
+                h={px(40.)}
+                px={px(14.)}
+                flex
+                items_center
+                bg={Theme::bg()}
+                rounded={Theme::radius_block()}
+                border_1
+                border_color={if focused { Theme::accent() } else { Theme::surface_raised() }}
+                text_size={px(13.)}
+                text_color={if show_placeholder { Theme::text_faint() } else { Theme::text() }}
+            >
+                {display}
+            </div>
+        };
 
         let Some(handle) = handle.filter(|_| enabled) else {
             return base.into_any_element();
@@ -288,10 +298,11 @@ impl SettingsModal {
         let frac = if max > min { ((cur - min) / (max - min)).clamp(0., 1.) as f32 } else { 0. };
         let unit_suffix = unit.map(|u| format!(" {u}")).unwrap_or_default();
         let sign = |n: f64| {
-            div()
-                .text_size(px(11.))
-                .text_color(Theme::text_faint())
-                .child(format!("{}{}", options::fmt_num(n), unit_suffix))
+            rsx! {
+                <div text_size={px(11.)} text_color={Theme::text_faint()}>
+                    {format!("{}{}", options::fmt_num(n), unit_suffix)}
+                </div>
+            }
         };
 
         // Tween endpoints for the fill/thumb. A drag of this slider snaps (it must
@@ -320,7 +331,7 @@ impl SettingsModal {
         let tween = (to - from).abs() > 0.0005;
         let glide = Animation::new(Duration::from_millis(140)).with_easing(ease_in_out);
 
-        let accent_fill = div().h_full().bg(Theme::accent()).rounded_full();
+        let accent_fill = rsx! { <div h_full bg={Theme::accent()} rounded_full /> };
         let accent_fill = if tween {
             accent_fill
                 .with_animation(SharedString::from(format!("slider-fill-{name}-{to}")), glide.clone(), move |el, t| {
@@ -330,25 +341,26 @@ impl SettingsModal {
         } else {
             accent_fill.w(relative(to)).into_any_element()
         };
-        let bar = div()
-            .flex_1()
-            .h(px(8.))
-            .rounded_full()
-            .bg(Theme::surface_raised())
-            .overflow_hidden()
-            .child(accent_fill);
+        let bar = rsx! {
+            <div flex_1 h={px(8.)} rounded_full bg={Theme::surface_raised()} overflow_hidden>
+                {accent_fill}
+            </div>
+        };
 
         // Grab handle centred on the fill's edge (`-8` = half its 16px width).
-        let thumb = div()
-            .absolute()
-            .top(px(2.))
-            .ml(px(-8.))
-            .w(px(16.))
-            .h(px(16.))
-            .rounded_full()
-            .bg(Theme::text())
-            .border_2()
-            .border_color(Theme::accent());
+        let thumb = rsx! {
+            <div
+                absolute
+                top={px(2.)}
+                ml={px(-8.)}
+                w={px(16.)}
+                h={px(16.)}
+                rounded_full
+                bg={Theme::text()}
+                border_2
+                border_color={Theme::accent()}
+            />
+        };
         let thumb = if tween {
             thumb
                 .with_animation(SharedString::from(format!("slider-thumb-{name}-{to}")), glide, move |el, t| {
@@ -360,14 +372,12 @@ impl SettingsModal {
         };
 
         // Taller, transparent hit row so a click/drag is easy to land.
-        let mut track = div()
-            .id(SharedString::from(format!("slider-{name}")))
-            .relative()
-            .h(px(20.))
-            .flex()
-            .items_center()
-            .child(bar)
-            .child(thumb);
+        let mut track = rsx! {
+            <div id={SharedString::from(format!("slider-{name}"))} relative h={px(20.)} flex items_center>
+                {bar}
+                {thumb}
+            </div>
+        };
 
         if enabled {
             // Track geometry (window-space left x + width), measured each paint by
@@ -406,30 +416,27 @@ impl SettingsModal {
                 );
         }
 
-        let track_col = div()
-            .flex_1()
-            .flex()
-            .flex_col()
-            .gap(px(5.))
-            .child(track)
-            .child(div().flex().justify_between().child(sign(min)).child(sign(max)));
+        let track_col = rsx! {
+            <div flex_1 flex flex_col gap={px(5.)}>
+                {track}
+                <div flex justify_between>
+                    {sign(min)}
+                    {sign(max)}
+                </div>
+            </div>
+        };
 
-        div()
-            .flex()
-            .items_center()
-            .gap(px(10.))
-            .child(step_btn(&self.state, modpack_id, name, "minus", "−", (cur - step).max(min), enabled))
-            .child(track_col)
-            .child(step_btn(&self.state, modpack_id, name, "plus", "+", (cur + step).min(max), enabled))
-            .child(
-                div()
-                    .w(px(72.))
-                    .text_size(px(13.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(Theme::text())
-                    .child(format!("{}{}", options::fmt_num(cur), unit_suffix)),
-            )
-            .into_any_element()
+        rsx! {
+            <div flex items_center gap={px(10.)}>
+                {step_btn(&self.state, modpack_id, name, "minus", "−", (cur - step).max(min), enabled)}
+                {track_col}
+                {step_btn(&self.state, modpack_id, name, "plus", "+", (cur + step).min(max), enabled)}
+                <div w={px(72.)} text_size={px(13.)} font_weight={FontWeight::SEMIBOLD} text_color={Theme::text()}>
+                    {format!("{}{}", options::fmt_num(cur), unit_suffix)}
+                </div>
+            </div>
+        }
+        .into_any_element()
     }
 
     /// Map a window-space cursor x onto the slider's stepped, clamped value and
@@ -454,13 +461,11 @@ impl Render for SettingsModal {
         let modpack = self.state.read(cx).selected_modpack().cloned();
 
         let Some(m) = modpack else {
-            let body = div()
-                .flex()
-                .items_center()
-                .justify_center()
-                .size_full()
-                .text_color(Theme::text_faint())
-                .child(crate::i18n::t().select_modpack);
+            let body = rsx! {
+                <div flex items_center justify_center size_full text_color={Theme::text_faint()}>
+                    {crate::i18n::t().select_modpack}
+                </div>
+            };
             return Modal::new(body)
                 .title(crate::i18n::t().modpack_settings_title)
                 .size(720., 620.)
@@ -485,21 +490,26 @@ impl Render for SettingsModal {
             self.slider_tween.entry(name).or_insert_with(|| Cell::new((f32::NAN, f32::NAN)));
         }
 
-        let mut col = div()
-            .id("modpack-settings")
-            .flex()
-            .flex_col()
-            .gap(px(20.))
-            .p(px(24.))
-            .size_full()
-            .overflow_y_scroll()
-            // Click anywhere that isn't the text field itself unfocuses it
-            // (text fields stop propagation in their own mouse-down handler).
-            .on_mouse_down(MouseButton::Left, |_, window, _| window.blur());
+        let mut col = rsx! {
+            <div
+                id="modpack-settings"
+                flex
+                flex_col
+                gap={px(20.)}
+                p={px(24.)}
+                size_full
+                overflow_y_scroll
+                // Click anywhere that isn't the text field itself unfocuses it
+                // (text fields stop propagation in their own mouse-down handler).
+                on_mouse_down={MouseButton::Left, |_, window, _| window.blur()}
+            />
+        };
         if schema.is_empty() {
-            col = col.child(
-                div().text_size(px(13.)).text_color(Theme::text_faint()).child(crate::i18n::t().no_modpack_settings),
-            );
+            col = col.child(rsx! {
+                <div text_size={px(13.)} text_color={Theme::text_faint()}>
+                    {crate::i18n::t().no_modpack_settings}
+                </div>
+            });
         }
         for field in &schema {
             if self.field_hidden(field, cx) {

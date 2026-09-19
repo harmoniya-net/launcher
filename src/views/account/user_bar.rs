@@ -6,6 +6,7 @@ use crate::widgets::icon::icon;
 
 use crate::state::{AppState, Route, SkinTab};
 use crate::theme::Theme;
+use rsx::rsx;
 
 pub struct UserBar {
     state: Entity<AppState>,
@@ -37,87 +38,85 @@ impl Render for UserBar {
             .and_then(|u| u.username.chars().next().map(|c| c.to_uppercase().to_string()))
             .unwrap_or_else(|| "?".to_string());
 
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .flex_shrink_0()
-            .mt(px(16.))
-            .px(px(16.))
-            .py(px(10.))
-            .h(px(56.))
-            .bg(Theme::surface())
-            .rounded(Theme::radius_panel())
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(12.))
-                    .child(
-                        if let Some(head_img) = head {
-                            div()
-                                .w(px(32.))
-                                .h(px(32.))
-                                .flex_shrink_0()
-                                .child(img(head_img).w(px(32.)).h(px(32.)))
-                                .into_any_element()
-                        } else {
-                            div()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .w(px(32.))
-                                .h(px(32.))
-                                .rounded_full()
-                                .bg(Theme::surface_raised())
-                                .text_size(px(14.))
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(Theme::text())
-                                .child(initial)
-                                .into_any_element()
-                        },
-                    )
-                    .child({
-                        let mut info = div()
-                            .flex()
-                            .flex_col()
-                            .child(
-                                div()
-                                    .text_size(px(14.))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(Theme::text())
-                                    .child(user.as_ref().map(|u| u.username.clone()).unwrap_or_default()),
-                            );
-                        if let Some((prefix, color)) = rank {
-                            info = info.child(
-                                div()
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(rgb(color.unwrap_or(0xAAAAAA)))
-                                    .child(prefix.to_string()),
-                            );
-                        }
-                        info
-                    }),
-            )
-            .child(
-                div()
-                    .id("settings-btn")
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .w(px(28.))
-                    .h(px(28.))
-                    .rounded(Theme::radius_card())
-                    .text_color(Theme::text_faint())
-                    .cursor_pointer()
-                    .hover(|s| s.bg(Theme::surface_raised()).text_color(Theme::text()))
-                    .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+        let avatar: gpui::AnyElement = if let Some(head_img) = head {
+            rsx! {
+                <div w={px(32.)} h={px(32.)} flex_shrink_0>
+                    {img(head_img).w(px(32.)).h(px(32.))}
+                </div>
+            }
+            .into_any_element()
+        } else {
+            rsx! {
+                <div
+                    flex
+                    items_center
+                    justify_center
+                    w={px(32.)}
+                    h={px(32.)}
+                    rounded_full
+                    bg={Theme::surface_raised()}
+                    text_size={px(14.)}
+                    font_weight={FontWeight::BOLD}
+                    text_color={Theme::text()}
+                >
+                    {initial}
+                </div>
+            }
+            .into_any_element()
+        };
+
+        let mut info = rsx! {
+            <div flex flex_col>
+                <div text_size={px(14.)} font_weight={FontWeight::SEMIBOLD} text_color={Theme::text()}>
+                    {user.as_ref().map(|u| u.username.clone()).unwrap_or_default()}
+                </div>
+            </div>
+        };
+        if let Some((prefix, color)) = rank {
+            info = info.child(rsx! {
+                <div text_size={px(12.)} font_weight={FontWeight::MEDIUM} text_color={rgb(color.unwrap_or(0xAAAAAA))}>
+                    {prefix.to_string()}
+                </div>
+            });
+        }
+
+        rsx! {
+            <div
+                flex
+                items_center
+                justify_between
+                flex_shrink_0
+                mt={px(16.)}
+                px={px(16.)}
+                py={px(10.)}
+                h={px(56.)}
+                bg={Theme::surface()}
+                rounded={Theme::radius_panel()}
+            >
+                <div flex items_center gap={px(12.)}>
+                    {avatar}
+                    {info}
+                </div>
+                <div
+                    id="settings-btn"
+                    flex
+                    items_center
+                    justify_center
+                    w={px(28.)}
+                    h={px(28.)}
+                    rounded={Theme::radius_card()}
+                    text_color={Theme::text_faint()}
+                    cursor_pointer
+                    hover={|s| s.bg(Theme::surface_raised()).text_color(Theme::text())}
+                    on_mouse_down={MouseButton::Left, move |_, _, cx| {
                         state_handle.update(cx, |s, cx| {
                             s.set_route(Route::Skin { tab: SkinTab::Skin }, cx);
                         });
-                    })
-                    .child(icon("icons/settings.svg", 14., Theme::text_faint())),
-            )
+                    }}
+                >
+                    {icon("icons/settings.svg", 14., Theme::text_faint())}
+                </div>
+            </div>
+        }
     }
 }

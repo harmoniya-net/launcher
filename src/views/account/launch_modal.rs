@@ -9,6 +9,7 @@ use harmoniya_launch::pipeline::{LaunchError, LaunchProgress, LaunchState};
 use crate::state::AppState;
 use crate::theme::Theme;
 use crate::widgets::modal::{Modal, OnClose};
+use rsx::rsx;
 
 pub struct LaunchModal {
     state: Entity<AppState>,
@@ -56,111 +57,79 @@ fn launched_view() -> gpui::AnyElement {
 }
 
 fn centered_message(text: &'static str) -> gpui::AnyElement {
-    div()
-        .flex()
-        .flex_1()
-        .items_center()
-        .justify_center()
-        .text_color(Theme::text_muted())
-        .text_size(px(14.))
-        .child(text)
-        .into_any_element()
+    rsx! {
+        <div flex flex_1 items_center justify_center text_color={Theme::text_muted()} text_size={px(14.)}>
+            {text}
+        </div>
+    }
+    .into_any_element()
 }
 
 fn progress_view(p: &LaunchProgress) -> gpui::AnyElement {
-    let mut block = div()
-        .flex()
-        .flex_col()
-        .gap(px(12.))
-        .child(
-            div()
-                .text_size(px(14.))
-                .text_color(Theme::text())
-                .child(crate::i18n::t().phase_label(p.phase)),
-        )
-        .child(
-            // Track
-            div()
-                .w_full()
-                .h(px(8.))
-                .bg(Theme::surface_raised())
-                .rounded(px(4.))
-                .overflow_hidden()
-                .child(
-                    div()
-                        .h_full()
-                        .w(relative(p.percent as f32 / 100.))
-                        .bg(Theme::text())
-                        .rounded(px(4.)),
-                ),
-        )
-        .child(
-            div()
-                .text_size(px(12.))
-                .text_color(Theme::text_muted())
-                .text_right()
-                .child(format!("{}%", p.percent)),
-        );
-
-    if !p.files.is_empty() {
-        let mut list = div()
-            .flex()
-            .flex_col()
-            .gap(px(8.))
-            .pt(px(12.))
-            .border_t_1()
-            .border_color(Theme::surface_raised());
-
-        for f in &p.files {
+    // One row per in-flight/completed file; count varies, so build the rows
+    // with an iterator and splice them into the static shell below.
+    let rows: Vec<gpui::AnyElement> = p
+        .files
+        .iter()
+        .map(|f| {
             let bytes = match f.total {
                 Some(total) => format!("{} / {}", format_bytes(f.bytes), format_bytes(total)),
                 None => format_bytes(f.bytes),
             };
-            let mut row = div().flex().flex_col().gap(px(4.)).text_size(px(12.)).child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(12.))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.))
-                            .truncate()
-                            .text_color(Theme::text())
-                            .child(file_label(&f.path)),
-                    )
-                    .child(
-                        div()
-                            .flex_shrink_0()
-                            .text_color(Theme::text_muted())
-                            .child(bytes),
-                    ),
-            );
-            if let Some(total) = f.total.filter(|t| *t > 0) {
+            let progress_bar = f.total.filter(|t| *t > 0).map(|total| {
                 let frac = (f.bytes as f32 / total as f32).clamp(0., 1.);
-                row = row.child(
-                    div()
-                        .w_full()
-                        .h(px(3.))
-                        .bg(Theme::surface_raised())
-                        .rounded(px(2.))
-                        .overflow_hidden()
-                        .child(
-                            div()
-                                .h_full()
-                                .w(relative(frac))
-                                .bg(Theme::text_muted())
-                                .rounded(px(2.)),
-                        ),
-                );
-            }
-            list = list.child(row);
-        }
-        block = block.child(list);
-    }
+                rsx! {
+                    <div w_full h={px(3.)} bg={Theme::surface_raised()} rounded={px(2.)} overflow_hidden>
+                        <div h_full w={relative(frac)} bg={Theme::text_muted()} rounded={px(2.)} />
+                    </div>
+                }
+                .into_any_element()
+            });
 
-    block.into_any_element()
+            rsx! {
+                <div flex flex_col gap={px(4.)} text_size={px(12.)}>
+                    <div flex items_center justify_between gap={px(12.)}>
+                        <div flex_1 min_w={px(0.)} truncate text_color={Theme::text()}>
+                            {file_label(&f.path)}
+                        </div>
+                        <div flex_shrink_0 text_color={Theme::text_muted()}>{bytes}</div>
+                    </div>
+                    {..progress_bar}
+                </div>
+            }
+            .into_any_element()
+        })
+        .collect();
+
+    let files_section: Option<gpui::AnyElement> = if p.files.is_empty() {
+        None
+    } else {
+        Some(
+            rsx! {
+                <div flex flex_col gap={px(8.)} pt={px(12.)} border_t_1 border_color={Theme::surface_raised()}>
+                    {..rows}
+                </div>
+            }
+            .into_any_element(),
+        )
+    };
+
+    rsx! {
+        <div flex flex_col gap={px(12.)}>
+            <div text_size={px(14.)} text_color={Theme::text()}>
+                {crate::i18n::t().phase_label(p.phase)}
+            </div>
+            // Track
+            <div w_full h={px(8.)} bg={Theme::surface_raised()} rounded={px(4.)} overflow_hidden>
+                <div h_full w={relative(p.percent as f32 / 100.)} bg={Theme::text()} rounded={px(4.)} />
+            </div>
+            <div text_size={px(12.)} text_color={Theme::text_muted()} text_right>
+                {format!("{}%", p.percent)}
+            </div>
+            {..files_section}
+        </div>
+    }
+    .into_any_element()
 }
 
 fn error_view(e: &LaunchError, retry: impl Fn(&mut App) + 'static) -> gpui::AnyElement {
@@ -173,82 +142,74 @@ fn error_view(e: &LaunchError, retry: impl Fn(&mut App) + 'static) -> gpui::AnyE
         s
     };
 
-    let mut block = div()
-        .flex()
-        .flex_col()
-        .gap(px(14.))
-        .child(
-            div()
-                .flex()
-                .items_baseline()
-                .justify_between()
-                .gap(px(12.))
-                .child(
-                    div()
-                        .text_size(px(16.))
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(Theme::status_offline())
-                        .child(crate::i18n::t().error_label(e.code)),
-                )
-                .child(
-                    div()
-                        .text_size(px(11.))
-                        .text_color(Theme::text_muted())
-                        .child(code_line),
-                ),
+    // Up to 50 paths listed; count varies, so the rows are built with an
+    // iterator and spliced into the static shell below.
+    let paths_section: Option<gpui::AnyElement> = if e.paths.is_empty() {
+        None
+    } else {
+        let rows: Vec<gpui::AnyElement> = e
+            .paths
+            .iter()
+            .take(50)
+            .map(|p| rsx! { <div truncate>{p.clone()}</div> }.into_any_element())
+            .collect();
+
+        Some(
+            rsx! {
+                <div
+                    flex
+                    flex_col
+                    gap={px(4.)}
+                    p={px(10.)}
+                    rounded={Theme::radius_card()}
+                    border_1
+                    border_color={Theme::surface_raised()}
+                    text_size={px(11.)}
+                    text_color={Theme::text_muted()}
+                >
+                    <div font_weight={FontWeight::SEMIBOLD} text_color={Theme::text()}>
+                        {crate::i18n::files_count(e.paths.len())}
+                    </div>
+                    {..rows}
+                </div>
+            }
+            .into_any_element(),
         )
-        .child(
-            div()
-                .text_size(px(13.))
-                .text_color(Theme::text())
-                .child(e.message.clone()),
-        );
+    };
 
-    if !e.paths.is_empty() {
-        let mut paths = div()
-            .flex()
-            .flex_col()
-            .gap(px(4.))
-            .p(px(10.))
-            .rounded(Theme::radius_card())
-            .border_1()
-            .border_color(Theme::surface_raised())
-            .text_size(px(11.))
-            .text_color(Theme::text_muted())
-            .child(
-                div()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(Theme::text())
-                    .child(crate::i18n::files_count(e.paths.len())),
-            );
-        for p in e.paths.iter().take(50) {
-            paths = paths.child(div().truncate().child(p.clone()));
-        }
-        block = block.child(paths);
+    rsx! {
+        <div flex flex_col gap={px(14.)}>
+            <div flex items_baseline justify_between gap={px(12.)}>
+                <div text_size={px(16.)} font_weight={FontWeight::BOLD} text_color={Theme::status_offline()}>
+                    {crate::i18n::t().error_label(e.code)}
+                </div>
+                <div text_size={px(11.)} text_color={Theme::text_muted()}>{code_line}</div>
+            </div>
+            <div text_size={px(13.)} text_color={Theme::text()}>{e.message.clone()}</div>
+            {..paths_section}
+            <div flex gap={px(8.)} pt={px(4.)}>
+                <div
+                    id="launch-retry"
+                    px={px(20.)}
+                    py={px(10.)}
+                    rounded={px(2.)}
+                    bg={Theme::text()}
+                    text_color={Theme::on_accent()}
+                    text_size={px(13.)}
+                    font_weight={FontWeight::BOLD}
+                    cursor_pointer
+                    hover={|s| s.bg(Theme::text())}
+                    on_mouse_down={MouseButton::Left, move |_, _, cx| {
+                        cx.stop_propagation();
+                        retry(cx);
+                    }}
+                >
+                    {crate::i18n::t().retry}
+                </div>
+            </div>
+        </div>
     }
-
-    block = block.child(
-        div().flex().gap(px(8.)).pt(px(4.)).child(
-            div()
-                .id("launch-retry")
-                .px(px(20.))
-                .py(px(10.))
-                .rounded(px(2.))
-                .bg(Theme::text())
-                .text_color(Theme::on_accent())
-                .text_size(px(13.))
-                .font_weight(FontWeight::BOLD)
-                .cursor_pointer()
-                .hover(|s| s.bg(Theme::text()))
-                .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                    cx.stop_propagation();
-                    retry(cx);
-                })
-                .child(crate::i18n::t().retry),
-        ),
-    );
-
-    block.into_any_element()
+    .into_any_element()
 }
 
 impl Render for LaunchModal {
@@ -274,15 +235,11 @@ impl Render for LaunchModal {
             _ => starting_view(),
         };
 
-        let body = div()
-            .flex()
-            .flex_col()
-            .gap(px(16.))
-            .flex_1()
-            .min_h(px(0.))
-            .p(px(24.))
-            .overflow_hidden()
-            .child(inner);
+        let body = rsx! {
+            <div flex flex_col gap={px(16.)} flex_1 min_h={px(0.)} p={px(24.)} overflow_hidden>
+                {inner}
+            </div>
+        };
 
         Modal::new(body)
             .title(title)

@@ -5,6 +5,7 @@ use gpui::{
     Animation, AnimationExt, AnyElement, App, FontWeight, InteractiveElement, IntoElement,
     MouseButton, ParentElement, Styled, div, ease_out_quint, px, svg,
 };
+use rsx::rsx;
 
 use crate::theme::Theme;
 
@@ -52,85 +53,74 @@ impl Modal {
         let on_close_for_overlay = on_close.clone();
         let on_close_for_button = on_close;
 
-        let overlay = div()
-            .id("modal-overlay")
-            .absolute()
-            .inset_0()
-            .flex()
-            .items_center()
-            .justify_center()
-            .p(px(32.))
-            .bg(Theme::overlay())
-            // `occlude` makes the backdrop absorb all mouse input so nothing
-            // behind the modal is interactive. A backdrop click dismisses the
-            // modal; the card stops propagation so clicks inside it don't close.
-            .occlude()
-            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                if let Some(cb) = on_close_for_overlay.as_ref() { cb(cx); }
-            })
-            .child(
-                div()
-                    .id("modal-card")
-                    .flex()
-                    .flex_col()
-                    .w(px(width))
-                    .h(px(height))
-                    .bg(Theme::surface())
-                    .rounded(Theme::radius_panel())
-                    .overflow_hidden()
-                    .shadow_lg()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| {
+        let overlay = rsx! {
+            <div
+                id="modal-overlay"
+                absolute
+                inset_0
+                flex
+                items_center
+                justify_center
+                p={px(32.)}
+                bg={Theme::overlay()}
+                // `occlude` makes the backdrop absorb all mouse input so nothing
+                // behind the modal is interactive. A backdrop click dismisses the
+                // modal; the card stops propagation so clicks inside it don't close.
+                occlude
+                on_mouse_down={MouseButton::Left, move |_, _, cx| {
+                    if let Some(cb) = on_close_for_overlay.as_ref() { cb(cx); }
+                }}
+            >
+                <div
+                    id="modal-card"
+                    flex
+                    flex_col
+                    w={px(width)}
+                    h={px(height)}
+                    bg={Theme::surface()}
+                    rounded={Theme::radius_panel()}
+                    overflow_hidden
+                    shadow_lg
+                    on_mouse_down={MouseButton::Left, |_, _, cx| {
                         cx.stop_propagation();
-                    })
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .px(px(24.))
-                            .py(px(16.))
-                            .border_b_1()
-                            .border_color(Theme::surface_raised())
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_size(px(16.))
-                                    .text_color(Theme::text())
-                                    .child(title.unwrap_or_default()),
-                            )
-                            .child(
-                                div()
-                                    .id("modal-close")
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .w(px(32.))
-                                    .h(px(32.))
-                                    .rounded(Theme::radius_card())
-                                    .text_color(Theme::text_muted())
-                                    .hover(|s| s.bg(Theme::surface_raised()).text_color(Theme::text()))
-                                    .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                                        cx.stop_propagation();
-                                        if let Some(cb) = on_close_for_button.as_ref() { cb(cx); }
-                                    })
-                                    .child(
-                                        svg()
-                                            .path("icons/x.svg")
-                                            .text_color(Theme::text_muted())
-                                            .w(px(16.))
-                                            .h(px(16.)),
-                                    ),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .min_h(px(0.))
-                            .child(body),
-                    ),
-            );
+                    }}
+                >
+                    <div
+                        flex
+                        items_center
+                        justify_between
+                        px={px(24.)}
+                        py={px(16.)}
+                        border_b_1
+                        border_color={Theme::surface_raised()}
+                    >
+                        <div font_weight={FontWeight::BOLD} text_size={px(16.)} text_color={Theme::text()}>
+                            {title.unwrap_or_default()}
+                        </div>
+                        <div
+                            id="modal-close"
+                            flex
+                            items_center
+                            justify_center
+                            w={px(32.)}
+                            h={px(32.)}
+                            rounded={Theme::radius_card()}
+                            text_color={Theme::text_muted()}
+                            hover={|s| s.bg(Theme::surface_raised()).text_color(Theme::text())}
+                            on_mouse_down={MouseButton::Left, move |_, _, cx| {
+                                cx.stop_propagation();
+                                if let Some(cb) = on_close_for_button.as_ref() { cb(cx); }
+                            }}
+                        >
+                            <svg path="icons/x.svg" text_color={Theme::text_muted()} w={px(16.)} h={px(16.)} />
+                        </div>
+                    </div>
+                    <div flex flex_col flex_1 min_h={px(0.)}>
+                        {body}
+                    </div>
+                </div>
+            </div>
+        };
 
         overlay
             .with_animation(

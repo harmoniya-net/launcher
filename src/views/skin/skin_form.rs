@@ -11,6 +11,7 @@ use crate::theme::Theme;
 use super::skin_form_widgets::{
     action_button, file_field, model_field, reset_link,
 };
+use rsx::rsx;
 
 #[derive(Default, Clone)]
 struct EditorState {
@@ -68,27 +69,13 @@ impl Render for SkinForm {
         let model_classic = cx.entity().clone();
         let model_slim = cx.entity().clone();
 
-        div()
-            .id("skin-form-scroll")
-            .flex_1()
-            .p(px(40.))
-            .overflow_y_scroll()
-            .flex()
-            .flex_col()
-            .gap(px(32.))
-            .child(
-                div()
-                    .text_size(px(28.))
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(Theme::text())
-                    .child(t.skin),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(20.))
-                    .child(file_field(t.skin_file, skin_name, !saving && can_skin, move |_, _, cx| {
+        rsx! {
+            <div id="skin-form-scroll" flex_1 p={px(40.)} overflow_y_scroll flex flex_col gap={px(32.)}>
+                <div text_size={px(28.)} font_weight={FontWeight::BOLD} text_color={Theme::text()}>
+                    {t.skin}
+                </div>
+                <div flex flex_col gap={px(20.)}>
+                    {file_field(t.skin_file, skin_name, !saving && can_skin, move |_, _, cx| {
                         let handle = pick_skin.clone();
                         crate::views::pick_path(cx, false, move |path, cx| {
                             let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
@@ -114,8 +101,8 @@ impl Render for SkinForm {
                                 cx.notify();
                             }).ok();
                         });
-                    }))
-                    .child(model_field(model, !saving && can_skin, {
+                    })}
+                    {model_field(model, !saving && can_skin, {
                         let h = model_classic;
                         move |_, _, cx| {
                             h.update(cx, |this, cx| {
@@ -133,8 +120,8 @@ impl Render for SkinForm {
                                 cx.notify();
                             });
                         }
-                    }))
-                    .child(file_field(t.cape_file, cape_name, !saving && can_cape, move |_, _, cx| {
+                    })}
+                    {file_field(t.cape_file, cape_name, !saving && can_cape, move |_, _, cx| {
                         let handle = pick_cape.clone();
                         crate::views::pick_path(cx, false, move |path, cx| {
                             let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
@@ -160,51 +147,38 @@ impl Render for SkinForm {
                                 cx.notify();
                             }).ok();
                         });
-                    })),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(14.))
-                    .child(
-                        action_button(t.save, !saving && has_changes, Theme::accent(), move |_, _, cx| {
-                            on_save.update(cx, |this, cx| this.save(cx));
-                        }),
-                    )
-                    .child(
-                        if let Some((text, ok)) = status {
-                            let color = match ok {
-                                Some(true) => Theme::status_online(),
-                                Some(false) => Theme::status_offline(),
-                                None => Theme::text_muted(),
-                            };
-                            div()
-                                .text_size(px(13.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(color)
-                                .child(text)
-                                .into_any_element()
-                        } else {
-                            div().into_any_element()
-                        },
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap(px(18.))
-                    .child(
-                        reset_link(t.reset_skin, !saving && can_skin && profile_skin.is_some(), move |_, _, cx| {
-                            reset_skin_handle.update(cx, |this, cx| this.reset(Kind::Skin, cx));
-                        }),
-                    )
-                    .child(
-                        reset_link(t.reset_cape, !saving && can_cape && profile_cape.is_some(), move |_, _, cx| {
-                            reset_cape_handle.update(cx, |this, cx| this.reset(Kind::Cape, cx));
-                        }),
-                    ),
-            )
+                    })}
+                </div>
+                <div flex items_center gap={px(14.)}>
+                    {action_button(t.save, !saving && has_changes, Theme::accent(), move |_, _, cx| {
+                        on_save.update(cx, |this, cx| this.save(cx));
+                    })}
+                    {if let Some((text, ok)) = status {
+                        let color = match ok {
+                            Some(true) => Theme::status_online(),
+                            Some(false) => Theme::status_offline(),
+                            None => Theme::text_muted(),
+                        };
+                        div()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(color)
+                            .child(text)
+                            .into_any_element()
+                    } else {
+                        div().into_any_element()
+                    }}
+                </div>
+                <div flex gap={px(18.)}>
+                    {reset_link(t.reset_skin, !saving && can_skin && profile_skin.is_some(), move |_, _, cx| {
+                        reset_skin_handle.update(cx, |this, cx| this.reset(Kind::Skin, cx));
+                    })}
+                    {reset_link(t.reset_cape, !saving && can_cape && profile_cape.is_some(), move |_, _, cx| {
+                        reset_cape_handle.update(cx, |this, cx| this.reset(Kind::Cape, cx));
+                    })}
+                </div>
+            </div>
+        }
     }
 }
 
