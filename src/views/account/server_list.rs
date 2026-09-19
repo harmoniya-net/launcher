@@ -170,8 +170,7 @@ impl ServerList {
                     .banner
                     .as_ref()
                     .and_then(|b| b.url.as_deref())
-                    .map(|u| crate::banner::at_size(u, 816, 400))
-                    .and_then(|url| self.state.read(cx).banner_cache.get(&url).cloned());
+                    .and_then(|url| self.state.read(cx).banner_cache.get(url).cloned());
                 let handle = state_handle.clone();
                 let hover_id = m.id.clone();
                 let on_hover = cx.listener(move |this: &mut Self, hovered: &bool, _, cx| {

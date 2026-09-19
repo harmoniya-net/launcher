@@ -4,7 +4,6 @@
 
 mod app;
 mod assets;
-mod banner;
 mod gpui_http;
 mod i18n;
 mod logo;

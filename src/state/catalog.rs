@@ -108,23 +108,18 @@ impl AppState {
         }).detach();
     }
 
-    /// Kick off background downloads of every modpack's banner at every aspect
-    /// we render (inactive card, active card, hero). Each completed download
-    /// lands in `banner_cache` and `cx.notify` schedules the swap. Since each
-    /// state has its own URL, we can use `ObjectFit::Fill` everywhere (which is
-    /// what GPUI needs to round corners) without distortion — the image was
-    /// already pre-cropped server-side to the exact aspect.
+    /// Kick off background downloads of every modpack's banner. One fetch per
+    /// modpack — the CMS serves the image at full resolution with no
+    /// server-side resize, so every rendered aspect (inactive card, active
+    /// card, hero) shares the same cached bytes and relies on `ObjectFit::Cover`
+    /// to crop per-container without distortion. Each completed download lands
+    /// in `banner_cache` and `cx.notify` schedules the swap.
     pub fn prefetch_banners(&mut self, cx: &mut Context<Self>) {
         let urls: Vec<String> = self
             .modpacks
             .iter()
             .filter_map(|m| m.banner.as_ref().and_then(|b| b.url.as_deref()))
-            .flat_map(|u| {
-                [
-                    crate::banner::at_size(u, 816, 400),  // card (active aspect; same URL inactive)
-                    crate::banner::at_size(u, 2400, 440), // hero
-                ]
-            })
+            .map(String::from)
             .filter(|u| !self.banner_cache.contains_key(u))
             .collect();
         if urls.is_empty() { return; }

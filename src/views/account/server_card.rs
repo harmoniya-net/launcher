@@ -41,11 +41,7 @@ pub fn server_card(
     let CardFrame { prev_h, target_h, banner_opacity, shadow_opacity } = frame;
     let id = m.id.clone();
     let status = derive_status(&m);
-    let banner_url = m
-        .banner
-        .as_ref()
-        .and_then(|b| b.url.as_deref())
-        .map(|u| crate::banner::at_size(u, 816, 400));
+    let banner_url = m.banner.as_ref().and_then(|b| b.url.clone());
 
     let text_color = if active || hovered { Theme::text() } else { Theme::text_faint() };
     let mut card = div()

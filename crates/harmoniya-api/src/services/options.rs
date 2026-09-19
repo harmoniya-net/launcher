@@ -1,5 +1,5 @@
 //! Per-modpack options — the "Налаштування модпаку" form. A schema (the modpack's
-//! `options` field, served by the petal CMS) of typed fields that the user fills
+//! `options` field, served by the CMS) of typed fields that the user fills
 //! in, resolved into opys `vars` + enabled `features` at launch.
 //!
 //! Binding: every field has a `name`. For leaf fields it's the var key; for a
@@ -12,6 +12,16 @@ use std::collections::HashMap;
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Deserializer, Serialize};
+
+/// Deserialize accepting `null` as the type's default value — the CMS sends
+/// an explicit `null` (not an absent key) for a list irrelevant to a given
+/// option's `type` (e.g. a slider's `choices`, a leaf's `options`), which
+/// plain `#[serde(default)]` doesn't cover (it only fires when the key is
+/// missing entirely).
+fn null_default<'de, T, D>(d: D) -> std::result::Result<T, D::Error>
+where T: Default + Deserialize<'de>, D: Deserializer<'de> {
+    Ok(Option::<T>::deserialize(d)?.unwrap_or_default())
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Choice {
@@ -41,6 +51,7 @@ pub enum Field {
         title: String,
         #[serde(default)]
         subtitle: Option<String>,
+        #[serde(default, deserialize_with = "null_default")]
         choices: Vec<Choice>,
         default: String,
     },
@@ -74,7 +85,7 @@ pub enum Field {
         // CMS sends `default` as the string "true"/"false".
         #[serde(default, deserialize_with = "de_bool")]
         default: bool,
-        #[serde(default)]
+        #[serde(default, deserialize_with = "null_default")]
         options: Vec<Field>,
     },
 }
@@ -232,8 +243,10 @@ pub fn fmt_num(n: f64) -> String {
 mod tests {
     use super::*;
 
-    /// The exact shape petal serves: a "fat" object per option with all fields
-    /// present (null when irrelevant) and `default` always a string.
+    /// A "fat" object per option with all fields present (null when
+    /// irrelevant) and `default` always a string — a superset of what the CMS
+    /// actually serves (it omits/nulls irrelevant fields per type), exercising
+    /// every field this parser tolerates in one shape.
     const CMS_OPTIONS: &str = r#"[
       {"type":"slider","name":"xmx","title":"RAM","subtitle":null,"min":1024,"max":16384,"step":512,"unit":"МБ","placeholder":null,"default":"4096","choices":[],"options":[]},
       {"type":"select","name":"renderer","title":"R","subtitle":null,"min":null,"max":null,"step":null,"unit":null,"placeholder":null,"default":"auto","choices":[{"label":"Авто","value":"auto"},{"label":"GL","value":"gl"}],"options":[]},

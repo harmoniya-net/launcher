@@ -78,7 +78,6 @@ anyhow = { workspace = true }
 futures = { workspace = true }
 tracing = { workspace = true }
 directories = { workspace = true }
-url = { workspace = true }
 open = { workspace = true }
 image = { workspace = true }
 

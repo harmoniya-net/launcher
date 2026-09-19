@@ -73,11 +73,7 @@ impl Render for Hero {
             PlayState::Online => t.play,
         };
 
-        let banner_url = modpack
-            .banner
-            .as_ref()
-            .and_then(|b| b.url.as_deref())
-            .map(|u| crate::banner::at_size(u, 2400, 440));
+        let banner_url = modpack.banner.as_ref().and_then(|b| b.url.clone());
         let cached_banner = banner_url.as_ref().and_then(|url| state.banner_cache.get(url).cloned());
 
         let play_handle = self.state.clone();
