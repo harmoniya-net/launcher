@@ -11,11 +11,11 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window,
 };
 
-use harmoniya_api::services::options::{self, Field, ModpackOptions};
+use harmoniya_launch::options::{self, Label, Localized, ModpackOptions, OptionDef};
 use crate::state::AppState;
 use crate::theme::Theme;
 use crate::views::account::settings_controls::{
-    field_card, header_text, path_control, select_control, step_btn,
+    field_card, header_text, localized, path_control, select_control, step_btn,
 };
 use crate::widgets::modal::{Modal, OnClose};
 
@@ -35,7 +35,8 @@ struct SliderDrag {
 }
 
 /// Per-modpack settings ("Налаштування модпаку"), opened from the hero's ⋮.
-/// Renders the modpack's options schema (vars + features), persisting choices.
+/// Renders the options the modpack's bundle declares in its head (vars +
+/// features), in the UI language where the bundle has it, persisting choices.
 pub struct SettingsModal {
     state: Entity<AppState>,
     on_close: OnClose,
@@ -62,33 +63,33 @@ impl SettingsModal {
     }
 
     /// Recursively collect the names of text fields (which need focus handles).
-    fn collect_text_names(fields: &[Field], out: &mut Vec<String>) {
-        for f in fields {
-            match f {
-                Field::Text { name, .. } => out.push(name.clone()),
-                Field::Feature { options, .. } => Self::collect_text_names(options, out),
+    fn collect_text_names(options: &[OptionDef], out: &mut Vec<String>) {
+        for option in options {
+            match option {
+                OptionDef::Text { name, .. } => out.push(name.clone()),
+                OptionDef::Feature { options, .. } => Self::collect_text_names(options, out),
                 _ => {}
             }
         }
     }
 
     /// Recursively collect slider names (which keep per-slider tween state).
-    fn collect_slider_names(fields: &[Field], out: &mut Vec<String>) {
-        for f in fields {
-            match f {
-                Field::Slider { name, .. } => out.push(name.clone()),
-                Field::Feature { options, .. } => Self::collect_slider_names(options, out),
+    fn collect_slider_names(options: &[OptionDef], out: &mut Vec<String>) {
+        for option in options {
+            match option {
+                OptionDef::Slider { name, .. } => out.push(name.clone()),
+                OptionDef::Feature { options, .. } => Self::collect_slider_names(options, out),
                 _ => {}
             }
         }
     }
 
-    /// Whether a schema field is hidden by the player's permissions. A
+    /// Whether an option is hidden by the player's permissions. A
     /// `Feature` requires `harmoniya.launcher.feature.{name}`; hidden by default
     /// until the lucky profile loads (so features don't flash in then vanish).
-    fn field_hidden(&self, field: &Field, cx: &Context<Self>) -> bool {
-        match field {
-            Field::Feature { name, .. } => self
+    fn field_hidden(&self, option: &OptionDef, cx: &Context<Self>) -> bool {
+        match option {
+            OptionDef::Feature { name, .. } => self
                 .state
                 .read(cx)
                 .lucky_profile
@@ -98,51 +99,53 @@ impl SettingsModal {
         }
     }
 
-    /// One schema field. `enabled` is false for children under a disabled feature.
+    /// One option. `enabled` is false for children under a disabled feature;
+    /// `locale` is the head's, what a plain-string text is written in.
+    #[allow(clippy::too_many_arguments)]
     fn field_view(
         &self,
         modpack_id: &str,
-        field: &Field,
+        option: &OptionDef,
+        locale: Option<&str>,
         saved: &ModpackOptions,
         enabled: bool,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let handle = &self.state;
-        match field {
-            Field::Feature { name, default, options, title, subtitle } => {
-                self.feature_view(modpack_id, name, *default, options, saved, title, subtitle.as_deref(), window, cx)
+        let tr = |text: &Localized| localized(text, locale);
+        let card = |label: &Label, control| {
+            let subtitle = label.subtitle.as_ref().map(tr);
+            field_card(&tr(&label.title), subtitle.as_deref(), enabled, control)
+        };
+        match option {
+            OptionDef::Feature { name, label, default, options } => {
+                self.feature_view(modpack_id, name, label, *default, options, locale, saved, window, cx)
             }
-            Field::Slider { name, min, max, step, default, title, subtitle, unit } => field_card(
-                title,
-                subtitle.as_deref(),
-                enabled,
-                self.slider_view(modpack_id, name, *min, *max, *step, *default, unit.as_deref(), saved, enabled, cx),
+            OptionDef::Slider { name, label, min, max, step, default, unit } => {
+                let unit = unit.as_ref().map(tr);
+                card(
+                    label,
+                    self.slider_view(modpack_id, name, *min, *max, *step, *default, unit.as_deref(), saved, enabled, cx),
+                )
+            }
+            OptionDef::Select { name, label, choices, default } => card(
+                label,
+                select_control(handle, modpack_id, name, choices, default, locale, saved, enabled),
             ),
-            Field::Select { name, choices, default, title, subtitle } => field_card(
-                title,
-                subtitle.as_deref(),
-                enabled,
-                select_control(handle, modpack_id, name, choices, default, saved, enabled),
-            ),
-            Field::File { name, title, subtitle } => field_card(
-                title,
-                subtitle.as_deref(),
-                enabled,
-                path_control(handle, modpack_id, name, false, saved, enabled),
-            ),
-            Field::Directory { name, title, subtitle } => field_card(
-                title,
-                subtitle.as_deref(),
-                enabled,
-                path_control(handle, modpack_id, name, true, saved, enabled),
-            ),
-            Field::Text { name, default, placeholder, title, subtitle } => field_card(
-                title,
-                subtitle.as_deref(),
-                enabled,
-                self.text_control(modpack_id, name, default.as_deref(), placeholder.as_deref(), saved, enabled, window, cx),
-            ),
+            OptionDef::File { name, label } => {
+                card(label, path_control(handle, modpack_id, name, false, saved, enabled))
+            }
+            OptionDef::Directory { name, label } => {
+                card(label, path_control(handle, modpack_id, name, true, saved, enabled))
+            }
+            OptionDef::Text { name, label, default, placeholder } => {
+                let placeholder = placeholder.as_ref().map(tr);
+                card(
+                    label,
+                    self.text_control(modpack_id, name, default.as_deref(), placeholder.as_deref(), saved, enabled, window, cx),
+                )
+            }
         }
     }
 
@@ -151,15 +154,15 @@ impl SettingsModal {
         &self,
         modpack_id: &str,
         name: &str,
+        label: &Label,
         default: bool,
-        options: &[Field],
+        options: &[OptionDef],
+        locale: Option<&str>,
         saved: &ModpackOptions,
-        title: &str,
-        subtitle: Option<&str>,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
-        let on = saved.features.get(name).copied().unwrap_or(default);
+        let on = options::feature_on(saved, name, default);
         let h = self.state.clone();
         let mid = modpack_id.to_string();
         let nm = name.to_string();
@@ -168,12 +171,14 @@ impl SettingsModal {
                 h.update(cx, |s, cx| s.set_feature(mid.clone(), nm.clone(), !on, cx));
             });
 
+        let title = localized(&label.title, locale);
+        let subtitle = label.subtitle.as_ref().map(|s| localized(s, locale));
         let header = div()
             .flex()
             .items_center()
             .justify_between()
             .gap(px(12.))
-            .child(header_text(title, subtitle).flex_1())
+            .child(header_text(&title, subtitle.as_deref()).flex_1())
             .child(switch);
 
         let mut col = div().flex().flex_col().gap(px(12.)).child(header);
@@ -182,7 +187,7 @@ impl SettingsModal {
                 continue;
             }
             col = col.child(
-                div().pl(px(12.)).child(self.field_view(modpack_id, child, saved, on, window, cx)),
+                div().pl(px(12.)).child(self.field_view(modpack_id, child, locale, saved, on, window, cx)),
             );
         }
         col.into_any_element()
@@ -468,7 +473,11 @@ impl Render for SettingsModal {
                 .render();
         };
 
-        let schema = m.options.clone();
+        // The bundle's head, as last read; a refresh keeps it shown meanwhile.
+        let head = self.state.read(cx).bundle_heads.get(&m.bundle_url).cloned().unwrap_or_default();
+        let schema: Vec<OptionDef> =
+            head.head.as_ref().map(|h| h.options.as_slice().to_vec()).unwrap_or_default();
+        let locale = head.head.as_ref().and_then(|h| h.locale.clone());
         let saved = self.state.read(cx).settings.modpack_options.get(&m.id).cloned().unwrap_or_default();
 
         // Ensure a focus handle exists for every text field.
@@ -497,15 +506,21 @@ impl Render for SettingsModal {
             // (text fields stop propagation in their own mouse-down handler).
             .on_mouse_down(MouseButton::Left, |_, window, _| window.blur());
         if schema.is_empty() {
-            col = col.child(
-                div().text_size(px(13.)).text_color(Theme::text_faint()).child(crate::i18n::t().no_modpack_settings),
-            );
+            let t = crate::i18n::t();
+            let note = if head.head.is_some() {
+                t.no_modpack_settings
+            } else if head.error.is_some() {
+                t.modpack_settings_failed
+            } else {
+                t.modpack_settings_loading
+            };
+            col = col.child(div().text_size(px(13.)).text_color(Theme::text_faint()).child(note));
         }
-        for field in &schema {
-            if self.field_hidden(field, cx) {
+        for option in &schema {
+            if self.field_hidden(option, cx) {
                 continue;
             }
-            col = col.child(self.field_view(&m.id, field, &saved, true, window, cx));
+            col = col.child(self.field_view(&m.id, option, locale.as_deref(), &saved, true, window, cx));
         }
 
         // While a slider is dragged, track the cursor at the window level so it

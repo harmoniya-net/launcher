@@ -1,5 +1,5 @@
-//! Modpack catalog: list/groups, favourites, banner prefetch, and the
-//! per-modpack option store.
+//! Modpack catalog: list/groups, favourites, banner prefetch, bundle heads,
+//! and the per-modpack option store.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -8,7 +8,7 @@ use gpui::{Context, Image};
 use harmoniya_api::config;
 use harmoniya_api::services::modpacks::{fetch_all, group};
 
-use super::{fetch_image_bytes, guess_format, AppEvent, AppState};
+use super::{fetch_image_bytes, guess_format, AppEvent, AppState, BundleHead};
 
 /// Don't refetch the catalog from the live CMS more than once per this window;
 /// the select-server / regain-focus refreshes are best-effort freshness, not a
@@ -190,6 +190,46 @@ impl AppState {
     }
 
     // ── Per-modpack options ──────────────────────────────────────────────
+
+    /// (Re)read the head of the bundle at `url` — one small range request off
+    /// the front of the file — so the settings form shows the options of the
+    /// bundle as it is published now. A head already read stays shown while
+    /// the new one loads, and stays if the refresh fails.
+    pub fn load_bundle_head(&mut self, url: String, cx: &mut Context<Self>) {
+        if url.trim().is_empty() {
+            return;
+        }
+        let entry = self.bundle_heads.entry(url.clone()).or_default();
+        if entry.loading {
+            return;
+        }
+        entry.loading = true;
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            let read = {
+                let url = url.clone();
+                async move { harmoniya_launch::options::read_head(&url).await }
+            };
+            let result = harmoniya_api::http::on_tokio(read).await;
+            this.update(cx, |state, cx| {
+                let entry = state.bundle_heads.entry(url).or_insert_with(BundleHead::default);
+                entry.loading = false;
+                match result {
+                    Ok(head) => {
+                        entry.head = Some(Arc::new(head));
+                        entry.error = None;
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "bundle head read failed");
+                        entry.error = Some(e.to_string());
+                    }
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
 
     /// Saved value for a leaf option (var), if the user set one.
     pub fn option_value(&self, modpack_id: &str, name: &str) -> Option<String> {

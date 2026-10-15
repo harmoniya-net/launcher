@@ -1,7 +1,8 @@
 //! The single application model. `AppState` is one GPUI `Entity` that the whole
 //! UI observes; its behavior is split across this module by concern:
 //! - [`session`] — login/logout, token refresh, the current user.
-//! - [`catalog`] — modpack list, groups, favourites, banner prefetch, options.
+//! - [`catalog`] — modpack list, groups, favourites, banner prefetch, bundle
+//!   heads (each modpack's options) and the player's option choices.
 //! - [`launch_flow`] — the play/install/launch flow and window hide-to-tray.
 //! - [`skin`] — skin profile, live preview, head-avatar prefetch.
 //! - [`ui`] — routing, modals, and launcher settings.
@@ -22,9 +23,9 @@ use harmoniya_api::services::{
     account::User,
     lucky::LuckyProfile,
     modpacks::{Modpack, ProjectGroup},
-    options::ModpackOptions,
     yggdrasil::{SkinModel, SkinProfile},
 };
+use harmoniya_launch::options::{Head, ModpackOptions};
 use harmoniya_launch::pipeline::{CancellationToken, LaunchState};
 
 mod catalog;
@@ -61,7 +62,9 @@ pub struct Selection {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Settings {
     pub data_dir: Option<String>,
-    /// Per-modpack option choices (vars + enabled features), keyed by modpack id.
+    /// Per-modpack option choices (vars + enabled features), keyed by modpack
+    /// id and, within one, by option name. The options themselves are the
+    /// bundle's (see [`BundleHead`]).
     #[serde(default)]
     pub modpack_options: HashMap<String, ModpackOptions>,
     /// Closing the window hides to the tray (default) instead of quitting.
@@ -85,6 +88,16 @@ impl Default for Settings {
             language: crate::i18n::Lang::default(),
         }
     }
+}
+
+/// A modpack bundle's head as the settings form last read it. The head is
+/// where a bundle says what a player may set, so the form is drawn from it. A
+/// refresh keeps the last head that was read until a new one arrives.
+#[derive(Clone, Debug, Default)]
+pub struct BundleHead {
+    pub head: Option<Arc<Head>>,
+    pub loading: bool,
+    pub error: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -117,6 +130,8 @@ pub struct AppState {
     pub groups: Vec<ProjectGroup>,
     pub modpacks_loading: bool,
     pub modpacks_error: Option<String>,
+    /// Bundle heads keyed by bundle URL, read when a modpack's settings open.
+    pub bundle_heads: HashMap<String, BundleHead>,
     /// When the catalog was last (re)fetched, to rate-limit background refreshes.
     pub last_catalog_fetch: Option<Instant>,
     pub selection: Selection,
@@ -202,6 +217,7 @@ impl AppState {
             groups: Vec::new(),
             modpacks_loading: false,
             modpacks_error: None,
+            bundle_heads: HashMap::new(),
             last_catalog_fetch: None,
             selection,
             favourites,

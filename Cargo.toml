@@ -65,7 +65,10 @@ tiny_http = "0.12"
 open = "5"
 sha2 = "0.10"
 rand = "0.8"
-opys-runtime = "0.1.25"
+# opys: the runtime installs and launches a bundle; the bundle crate is where
+# its head — the options a player may set — is typed.
+opys-runtime = "0.9.0"
+opys-bundle = "0.9.0"
 libc = "0.2"
 
 [dependencies]

@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use gpui::{AppContext, Context};
-use harmoniya_api::services::options;
 use harmoniya_launch::pipeline::{self as launch, LaunchMsg, LaunchState};
 
 use super::{ActiveModal, AppState, MainWindow};
@@ -68,10 +67,10 @@ impl AppState {
         }
         let store = self.session.clone();
         let Some(modpack) = self.selected_modpack().cloned() else { return; };
-        if modpack.manifest_url.trim().is_empty() {
+        if modpack.bundle_url.trim().is_empty() {
             self.launch_state = LaunchState::Error(launch::LaunchError {
                 code: launch::ErrorCode::Unknown,
-                message: crate::i18n::t().no_manifest.into(),
+                message: crate::i18n::t().no_bundle.into(),
                 phase: None,
                 paths: Vec::new(),
             });
@@ -84,12 +83,12 @@ impl AppState {
         cx.notify();
 
         let (tx, mut rx) = futures::channel::mpsc::unbounded::<LaunchMsg>();
-        let manifest_url = modpack.manifest_url.clone();
+        let bundle_url = modpack.bundle_url.clone();
         let modpack_id = modpack.id.clone();
 
-        // Resolve the modpack's options (from the CMS) into extra vars + enabled features.
+        // The player's choices; the pipeline resolves them against the head of
+        // the bundle it installs into extra vars + enabled features.
         let saved = self.settings.modpack_options.get(&modpack.id).cloned().unwrap_or_default();
-        let (extra_vars, features) = options::resolve(&modpack.options, &saved);
 
         // Cancellation handle so closing the launch modal aborts the install.
         let cancel = launch::CancellationToken::new();
@@ -100,10 +99,9 @@ impl AppState {
             harmoniya_api::http::on_tokio(launch::run(
                 store,
                 modpack_id,
-                manifest_url,
+                bundle_url,
                 data_dir,
-                extra_vars,
-                features,
+                saved,
                 cancel,
                 tx,
             ))

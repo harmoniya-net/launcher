@@ -6,9 +6,15 @@ use gpui::{
     ParentElement, SharedString, Styled,
 };
 
-use harmoniya_api::services::options::{self, Choice, ModpackOptions};
+use harmoniya_launch::options::{self, Choice, ModpackOptions};
 use crate::state::AppState;
 use crate::theme::Theme;
+
+/// A bundle's text in the launcher's current UI language, falling back to the
+/// head's `locale`, then to whatever language there is.
+pub(crate) fn localized(text: &options::Localized, locale: Option<&str>) -> String {
+    options::localize(text, crate::i18n::current().tag(), locale).to_string()
+}
 
 pub(crate) fn header_text(title: &str, subtitle: Option<&str>) -> gpui::Div {
     let mut col = div().flex().flex_col().gap(px(2.)).child(
@@ -65,12 +71,14 @@ pub(crate) fn step_btn(
         .into_any_element()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn select_control(
     handle: &Entity<AppState>,
     modpack_id: &str,
     name: &str,
     choices: &[Choice],
     default: &str,
+    locale: Option<&str>,
     saved: &ModpackOptions,
     enabled: bool,
 ) -> gpui::AnyElement {
@@ -85,7 +93,7 @@ pub(crate) fn select_control(
             .text_size(px(13.))
             .bg(if active { Theme::accent() } else { Theme::surface_raised() })
             .text_color(if active { Theme::on_accent() } else { Theme::text() })
-            .child(c.label.clone());
+            .child(localized(&c.label, locale));
         let chip = if enabled {
             let h = handle.clone();
             let mid = modpack_id.to_string();

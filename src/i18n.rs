@@ -31,6 +31,16 @@ pub fn set(lang: Lang) {
     CURRENT.store(v, Ordering::Relaxed);
 }
 
+impl Lang {
+    /// The BCP 47 tag of the language, as a bundle's translated texts key it.
+    pub fn tag(self) -> &'static str {
+        match self {
+            Lang::Uk => "uk",
+            Lang::En => "en",
+        }
+    }
+}
+
 pub fn current() -> Lang {
     match CURRENT.load(Ordering::Relaxed) {
         1 => Lang::En,
@@ -126,6 +136,8 @@ pub struct Strings {
     pub modpack_settings_title: &'static str,
     pub select_modpack: &'static str,
     pub no_modpack_settings: &'static str,
+    pub modpack_settings_loading: &'static str,
+    pub modpack_settings_failed: &'static str,
     pub not_set: &'static str,
     pub reset: &'static str,
 
@@ -135,21 +147,26 @@ pub struct Strings {
     pub retry: &'static str,
     pub launch_title: &'static str,
     pub sign_in_to_play: &'static str,
-    pub no_manifest: &'static str,
+    pub no_bundle: &'static str,
 
     // Install pipeline phases (long form for the progress bar, short for the
     // error footer) and error-code titles.
     pub phase_resolve: &'static str,
-    pub phase_download: &'static str,
+    pub phase_fetch: &'static str,
     pub phase_verify: &'static str,
     pub phase_extract: &'static str,
+    pub phase_cleanup: &'static str,
     pub phase_resolve_short: &'static str,
-    pub phase_download_short: &'static str,
+    pub phase_fetch_short: &'static str,
     pub phase_verify_short: &'static str,
     pub phase_extract_short: &'static str,
+    pub phase_cleanup_short: &'static str,
     pub err_network: &'static str,
     pub err_integrity: &'static str,
     pub err_extract: &'static str,
+    pub err_manifest: &'static str,
+    pub err_io: &'static str,
+    pub err_cancelled: &'static str,
     pub err_unknown: &'static str,
 
     // Auto-update screen
@@ -162,18 +179,20 @@ impl Strings {
     pub fn phase_label(&self, phase: Phase) -> &'static str {
         match phase {
             Phase::Resolve => self.phase_resolve,
-            Phase::Download => self.phase_download,
+            Phase::Fetch => self.phase_fetch,
             Phase::Verify => self.phase_verify,
             Phase::Extract => self.phase_extract,
+            Phase::Cleanup => self.phase_cleanup,
         }
     }
 
     pub fn phase_short(&self, phase: Phase) -> &'static str {
         match phase {
             Phase::Resolve => self.phase_resolve_short,
-            Phase::Download => self.phase_download_short,
+            Phase::Fetch => self.phase_fetch_short,
             Phase::Verify => self.phase_verify_short,
             Phase::Extract => self.phase_extract_short,
+            Phase::Cleanup => self.phase_cleanup_short,
         }
     }
 
@@ -182,6 +201,9 @@ impl Strings {
             ErrorCode::Network => self.err_network,
             ErrorCode::Integrity => self.err_integrity,
             ErrorCode::Extract => self.err_extract,
+            ErrorCode::Manifest => self.err_manifest,
+            ErrorCode::Io => self.err_io,
+            ErrorCode::Cancelled => self.err_cancelled,
             ErrorCode::Unknown => self.err_unknown,
         }
     }
@@ -252,6 +274,8 @@ static UK: Strings = Strings {
     modpack_settings_title: "Налаштування модпаку",
     select_modpack: "Оберіть модпак",
     no_modpack_settings: "Для цього модпаку немає налаштувань.",
+    modpack_settings_loading: "Завантаження налаштувань…",
+    modpack_settings_failed: "Не вдалося завантажити налаштування модпаку.",
     not_set: "не вибрано",
     reset: "Скинути",
 
@@ -260,19 +284,24 @@ static UK: Strings = Strings {
     retry: "Повторити",
     launch_title: "Запуск",
     sign_in_to_play: "Увійдіть в акаунт, щоб запустити гру.",
-    no_manifest: "Для цього модпаку не налаштовано маніфест.",
+    no_bundle: "Цей модпак ще не опубліковано.",
 
-    phase_resolve: "Завантаження маніфесту…",
-    phase_download: "Завантаження файлів…",
+    phase_resolve: "Отримання модпаку…",
+    phase_fetch: "Завантаження файлів…",
     phase_verify: "Перевірка цілісності…",
     phase_extract: "Розпакування…",
-    phase_resolve_short: "отримання маніфесту",
-    phase_download_short: "завантаження",
+    phase_cleanup: "Прибирання застарілих файлів…",
+    phase_resolve_short: "отримання модпаку",
+    phase_fetch_short: "завантаження",
     phase_verify_short: "перевірка цілісності",
     phase_extract_short: "розпакування",
+    phase_cleanup_short: "прибирання",
     err_network: "Помилка мережі",
     err_integrity: "Файл пошкоджено",
     err_extract: "Помилка розпакування",
+    err_manifest: "Модпак не прочитано",
+    err_io: "Помилка запису на диск",
+    err_cancelled: "Скасовано",
     err_unknown: "Невідома помилка",
 
     updating_title: "Оновлення",
@@ -345,6 +374,8 @@ static EN: Strings = Strings {
     modpack_settings_title: "Modpack settings",
     select_modpack: "Select a modpack",
     no_modpack_settings: "This modpack has no settings.",
+    modpack_settings_loading: "Loading settings…",
+    modpack_settings_failed: "Couldn't load this modpack's settings.",
     not_set: "not set",
     reset: "Reset",
 
@@ -353,19 +384,24 @@ static EN: Strings = Strings {
     retry: "Retry",
     launch_title: "Launch",
     sign_in_to_play: "Sign in to launch the game.",
-    no_manifest: "This modpack has no manifest configured.",
+    no_bundle: "This modpack hasn't been published yet.",
 
-    phase_resolve: "Downloading manifest…",
-    phase_download: "Downloading files…",
+    phase_resolve: "Fetching modpack…",
+    phase_fetch: "Downloading files…",
     phase_verify: "Verifying integrity…",
     phase_extract: "Extracting…",
-    phase_resolve_short: "manifest fetch",
-    phase_download_short: "download",
+    phase_cleanup: "Removing stale files…",
+    phase_resolve_short: "modpack fetch",
+    phase_fetch_short: "download",
     phase_verify_short: "integrity check",
     phase_extract_short: "extraction",
+    phase_cleanup_short: "cleanup",
     err_network: "Network error",
     err_integrity: "File corrupted",
     err_extract: "Extraction error",
+    err_manifest: "Unreadable modpack",
+    err_io: "Disk write error",
+    err_cancelled: "Cancelled",
     err_unknown: "Unknown error",
 
     updating_title: "Updating",

@@ -2837,8 +2837,12 @@ dependencies = [
  "harmoniya-api",
  "indexmap",
  "libc",
+ "opys-bundle",
+ "opys-core",
  "opys-runtime",
+ "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tracing",
 ]
@@ -4416,12 +4420,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
-name = "opys-core"
-version = "0.1.25"
+name = "opys-bundle"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2aa27919d8c73611a781c2580662b0e967076be6cbb6e75ad3fb9c1c3379229e"
+checksum = "e948e0a6d9f56ce65c897055e322d9c5fb168634c537dcd853847eaf28007be0"
 dependencies = [
  "base64",
+ "hex",
+ "opys-core",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.18",
+ "zip",
+]
+
+[[package]]
+name = "opys-core"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27979bb7c09c4c2537b793608bd7fb25114fcdb7e930418751aac82e7813c015"
+dependencies = [
  "indexmap",
  "opys-mojang-rules",
  "regex",
@@ -4432,9 +4451,9 @@ dependencies = [
 
 [[package]]
 name = "opys-mojang-rules"
-version = "0.1.25"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84de9924fd246f24e8b1f0ce09e5790dce0681fbe5b10a5295fa213b8e5f04b6"
+checksum = "175a3331d834e8e0a18b0d583212163d805b211c650716371532ed3c94fbaf86"
 dependencies = [
  "regex",
  "serde",
@@ -4443,17 +4462,17 @@ dependencies = [
 
 [[package]]
 name = "opys-runtime"
-version = "0.1.25"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b18a3910edc990b067449be3df485f394292ec46fb16475a7b409be007d6da4"
+checksum = "c0c672512c8433182194f329945c36d4fe1a6c8589cb4a33f84c47130cdded73"
 dependencies = [
- "base64",
  "bytes",
  "flate2",
  "futures",
  "hex",
  "indexmap",
  "md-5",
+ "opys-bundle",
  "opys-core",
  "opys-mojang-rules",
  "rand 0.8.6",
@@ -4464,6 +4483,7 @@ dependencies = [
  "sha1",
  "sha2",
  "tar",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",

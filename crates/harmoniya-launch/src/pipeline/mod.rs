@@ -1,44 +1,55 @@
-//! Game launch pipeline — install + spawn a modpack from its CMS manifest URL.
+//! Game launch pipeline — install + spawn a modpack from its published opys
+//! bundle.
 //!
-//! Mirrors the web launcher (`server/api/launch/[id].get.ts` + `useLauncher.ts`):
-//! resolve auth (username / uuid / yggdrasil token), pick the data dir, run the
-//! `opys_runtime` install pipeline streaming progress, then spawn the game with
-//! `install: false`. Progress and the terminal result are pushed back to the UI
-//! over an unbounded channel so the launch modal can render exactly like the web
-//! `LaunchModal.vue` (phase label, percent bar, per-file rows, error block).
+//! Resolve auth (username / uuid / yggdrasil token), read the bundle's head and
+//! resolve the player's saved options against it, run the `opys_runtime`
+//! install streaming progress, then spawn what the manifest says to run.
+//! Progress and the terminal result are pushed back to the UI over an
+//! unbounded channel so the launch modal can render them (phase label, percent
+//! bar, per-file rows, error block).
 
 use std::sync::{Arc, Mutex};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use futures::channel::mpsc::UnboundedSender;
 use indexmap::IndexMap;
-use opys_runtime::{InstallError, InstallOptions, InstallProgress, LaunchOptions, ManifestSource};
+pub use opys_runtime::{LaunchSpec, ManifestSource};
+use opys_runtime::{ErrorReport, InstallError, InstallOptions, InstallProgress, LaunchOptions, ROOT_VAR};
 /// Re-exported so the app can mint a token and cancel an in-flight install.
 pub use opys_runtime::CancellationToken;
 
 use harmoniya_api::auth::{self, TokenStore};
 use harmoniya_api::services::account::fetch_me;
 
+use crate::options::{self, ModpackOptions};
+
 mod progress;
 use progress::Tracker;
 
-/// Install/launch phases and the percent window each occupies on the overall
-/// bar. Mirrors `PHASE_RANGES` / `PHASE_LABELS` in the web handler.
+/// Install phases, as the runtime runs them, and the percent window each
+/// occupies on the overall bar. The runtime also scans what is already on
+/// disk between resolving and fetching; it reports nothing of its own there,
+/// so that time shows as the end of `Resolve`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Phase {
+    /// Reading the bundle's head, then downloading and opening the bundle.
     Resolve,
-    Download,
+    /// Downloading the files the manifest lists that aren't on disk yet.
+    Fetch,
     Verify,
     Extract,
+    /// Removing what the manifest's `cleanup` rules name (e.g. stray mods).
+    Cleanup,
 }
 
 impl Phase {
     fn range(self) -> (f32, f32) {
         match self {
             Phase::Resolve => (0., 5.),
-            Phase::Download => (5., 80.),
-            Phase::Verify => (80., 90.),
-            Phase::Extract => (90., 100.),
+            Phase::Fetch => (5., 85.),
+            Phase::Verify => (85., 93.),
+            Phase::Extract => (93., 99.),
+            Phase::Cleanup => (99., 100.),
         }
     }
 }
@@ -61,9 +72,18 @@ pub struct LaunchProgress {
 /// localization catalog (`i18n`), keeping this crate language-neutral.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ErrorCode {
+    /// A download was refused or failed.
     Network,
+    /// Files on disk aren't the ones the manifest pins.
     Integrity,
+    /// An archive could not be unpacked.
     Extract,
+    /// The bundle (or its manifest) is one this launcher can't read.
+    Manifest,
+    /// The file system refused something (permissions, disk full, …).
+    Io,
+    /// The player closed the launch modal mid-install.
+    Cancelled,
     Unknown,
 }
 
@@ -154,71 +174,94 @@ fn uuid_from_ygg(ygg_token: &str) -> anyhow::Result<String> {
     Ok(uuid.replace('-', ""))
 }
 
+/// Map the runtime's error kind ([`ErrorReport`], its `code` as data) onto the
+/// launcher's. Nothing here reads the wording of a message.
 fn classify(err: &InstallError, phase: Option<Phase>) -> LaunchError {
-    let (code, paths) = match err {
-        InstallError::Network { .. } => (ErrorCode::Network, Vec::new()),
-        InstallError::Integrity { paths } => (ErrorCode::Integrity, paths.clone()),
-        InstallError::Extraction { .. } => (ErrorCode::Extract, Vec::new()),
-        _ => (ErrorCode::Unknown, Vec::new()),
+    let (code, paths) = match err.report() {
+        ErrorReport::Network { .. } => (ErrorCode::Network, Vec::new()),
+        ErrorReport::Integrity { paths, .. } => (ErrorCode::Integrity, paths),
+        ErrorReport::Extraction { artifact_path, .. } => (ErrorCode::Extract, vec![artifact_path]),
+        ErrorReport::Manifest { .. } => (ErrorCode::Manifest, Vec::new()),
+        ErrorReport::Io { path, .. } => {
+            (ErrorCode::Io, (!path.is_empty()).then_some(path).into_iter().collect())
+        }
+        ErrorReport::Cancelled { .. } => (ErrorCode::Cancelled, Vec::new()),
+        ErrorReport::Other { .. } => (ErrorCode::Unknown, Vec::new()),
     };
     LaunchError { code, message: err.to_string(), phase, paths }
 }
 
-/// Build the interpolation vars the manifest expects (`username`, `uuid`,
-/// `token`, `root`). Same keys the web handler injects.
-fn launch_vars(username: &str, uuid: &str, token: &str, root: &str) -> IndexMap<String, String> {
+/// Who is playing: what the launcher always tells a manifest, as the vars
+/// `username`, `uuid` and `token` (yggdrasil).
+#[derive(Clone, Debug)]
+pub struct Player {
+    pub username: String,
+    pub uuid: String,
+    pub token: String,
+}
+
+/// The vars every launch is given (`username`, `uuid`, `token`, `root`), with
+/// the player's option values layered on top — they may override any of them,
+/// e.g. a text option that fills `username` behind a feature. `root` is the one
+/// var the runtime reads by name, and the caller's always wins over the
+/// manifest's.
+fn launch_vars(player: &Player, root: &str, options: IndexMap<String, String>) -> IndexMap<String, String> {
     let mut vars = IndexMap::new();
-    vars.insert("username".to_string(), username.to_string());
-    vars.insert("uuid".to_string(), uuid.to_string());
-    vars.insert("token".to_string(), token.to_string());
-    vars.insert("root".to_string(), root.to_string());
+    vars.insert("username".to_string(), player.username.clone());
+    vars.insert("uuid".to_string(), player.uuid.clone());
+    vars.insert("token".to_string(), player.token.clone());
+    vars.insert(ROOT_VAR.to_string(), root.to_string());
+    vars.extend(options);
     vars
 }
 
 /// Drive the full launch: resolve auth, install, spawn. Runs on the tokio
 /// runtime (call via `harmoniya_api::http::on_tokio`). Reports everything over
 /// `tx`. Cancelling `cancel` aborts an in-flight install (downloads included).
-#[allow(clippy::too_many_arguments)]
 pub async fn run(
     store: Arc<TokenStore>,
     modpack_id: String,
-    manifest_url: String,
+    bundle_url: String,
     data_dir: String,
-    extra_vars: IndexMap<String, String>,
-    features: Vec<String>,
+    saved: ModpackOptions,
     cancel: CancellationToken,
     tx: UnboundedSender<LaunchMsg>,
 ) {
     // The progress callback fires on the tokio runtime and must be `Fn`, so the
     // tracker lives behind a mutex and pushes snapshots into the same channel.
     let tracker = Arc::new(Mutex::new(Tracker::default()));
-    let phase_of = {
+    let on_progress: Arc<dyn Fn(InstallProgress) + Send + Sync> = {
         let tracker = Arc::clone(&tracker);
-        move || tracker.lock().unwrap().phase
+        let tx = tx.clone();
+        Arc::new(move |p| {
+            if let Some(snapshot) = tracker.lock().unwrap().apply(p) {
+                let _ = tx.unbounded_send(LaunchMsg::Progress(snapshot));
+            }
+        })
     };
+    let mut install = InstallOptions::new();
+    install.on_progress = Some(on_progress);
+    install.cancel = cancel;
 
-    let result =
-        run_inner(store, modpack_id, &manifest_url, &data_dir, extra_vars, features, cancel, &tx, Arc::clone(&tracker))
-            .await;
+    let result = run_inner(store, modpack_id, bundle_url, &data_dir, &saved, install).await;
     let msg = match result {
         Ok(pid) => LaunchMsg::Done { pid },
-        Err(e) => LaunchMsg::Error(classify(&e, phase_of())),
+        Err(e) => LaunchMsg::Error(classify(&e, tracker.lock().unwrap().phase)),
     };
     let _ = tx.unbounded_send(msg);
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn run_inner(
     store: Arc<TokenStore>,
     modpack_id: String,
-    manifest_url: &str,
+    bundle_url: String,
     data_dir: &str,
-    extra_vars: IndexMap<String, String>,
-    features: Vec<String>,
-    cancel: CancellationToken,
-    tx: &UnboundedSender<LaunchMsg>,
-    tracker: Arc<Mutex<Tracker>>,
+    saved: &ModpackOptions,
+    install: InstallOptions,
 ) -> Result<u32, InstallError> {
+    if let Some(cb) = &install.on_progress {
+        cb(InstallProgress::Resolve);
+    }
     // The store owns refresh + rotation + persistence; we just ask for a token.
     let access = store
         .access_token()
@@ -230,46 +273,78 @@ async fn run_inner(
         .await
         .map_err(|e| InstallError::other(format!("{e:#}")))?;
     let uuid = uuid_from_ygg(&ygg_token).map_err(|e| InstallError::other(format!("{e:#}")))?;
+    let player = Player { username: user.username, uuid, token: ygg_token };
 
-    tokio::fs::create_dir_all(data_dir).await.map_err(|source| InstallError::Io {
-        path: data_dir.to_owned(),
+    // `root` is the shared data dir: every pack's manifest keeps its game
+    // directory in a subdirectory of its own and shares `libraries`/`assets`.
+    let spec = prepare(ManifestSource::Url(bundle_url), data_dir, &player, saved, install).await?;
+
+    let mut command = tokio::process::Command::new(&spec.command);
+    command.args(&spec.args).current_dir(&spec.workdir).envs(&spec.envs);
+    let child = command.spawn().map_err(|source| InstallError::Io {
+        path: spec.command.clone(),
         source,
     })?;
-
-    // Start from the base vars, then layer the user's modpack options on top so
-    // modpack options always override (incl. username/uuid/token/root).
-    let mut vars = launch_vars(&user.username, &uuid, &ygg_token, data_dir);
-    for (k, v) in extra_vars {
-        vars.insert(k, v);
-    }
-
-    // Install: stream progress through the tracker into the channel.
-    let on_progress: Arc<dyn Fn(InstallProgress) + Send + Sync> = {
-        let tracker = Arc::clone(&tracker);
-        let tx = tx.clone();
-        Arc::new(move |p| {
-            if let Some(snapshot) = tracker.lock().unwrap().apply(p) {
-                let _ = tx.unbounded_send(LaunchMsg::Progress(snapshot));
-            }
-        })
-    };
-    let mut install_opts = InstallOptions::new();
-    install_opts.vars = Some(vars.clone());
-    install_opts.features = features.clone();
-    install_opts.on_progress = Some(on_progress);
-    install_opts.cancel = cancel;
-    opys_runtime::install(ManifestSource::Url(manifest_url), install_opts).await?;
-
-    // Build the spec and spawn the game without re-installing.
-    let mut launch_opts = LaunchOptions::new();
-    launch_opts.vars = Some(vars);
-    launch_opts.features = features;
-    launch_opts.do_install = false;
-    let child = opys_runtime::launch(ManifestSource::Url(manifest_url), launch_opts).await?;
 
     let pid = child.id().unwrap_or(0);
     // Track the process by modpack so the UI can stop it, it's stopped on quit,
     // and a background watcher clears it when the game exits on its own.
     crate::game::register(modpack_id, child);
     Ok(pid)
+}
+
+/// Install the bundle `source` names into `root` and say what to run: its
+/// head's options resolved against the player's `saved` choices, layered over
+/// the player's vars. Everything of a launch but auth and the spawn.
+pub async fn prepare(
+    source: ManifestSource,
+    root: &str,
+    player: &Player,
+    saved: &ModpackOptions,
+    install: InstallOptions,
+) -> Result<LaunchSpec, InstallError> {
+    // The options are the bundle's own, read off its head: whatever the UI
+    // last showed, this is the schema the bundle being installed was built with.
+    let head = options::head_of(&source).await?;
+    let (option_vars, features) = options::resolve(&head.options, saved);
+
+    tokio::fs::create_dir_all(root).await.map_err(|source| InstallError::Io {
+        path: root.to_owned(),
+        source,
+    })?;
+    let mut launch = LaunchOptions::new();
+    launch.vars = Some(launch_vars(player, root, option_vars));
+    launch.features = features;
+    launch.install = Some(install);
+    // One resolve for both: the bundle is downloaded and opened once, installed
+    // from, and asked what to run.
+    opys_runtime::prepare(source, launch).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn options_layer_over_the_base_vars_except_where_they_dont_say() {
+        let mut options = IndexMap::new();
+        options.insert("username".to_string(), "Custom".to_string());
+        options.insert("xmx".to_string(), "4096".to_string());
+        let player = Player { username: "Steve".into(), uuid: "u".into(), token: "t".into() };
+        let vars = launch_vars(&player, "/r", options);
+        assert_eq!(vars["username"], "Custom");
+        assert_eq!(vars["uuid"], "u");
+        assert_eq!(vars[ROOT_VAR], "/r");
+        assert_eq!(vars["xmx"], "4096");
+    }
+
+    #[test]
+    fn errors_are_told_apart_by_kind_not_wording() {
+        let e = classify(&InstallError::Manifest("bad".into()), Some(Phase::Resolve));
+        assert_eq!(e.code, ErrorCode::Manifest);
+        let e = classify(&InstallError::Cancelled, Some(Phase::Fetch));
+        assert_eq!(e.code, ErrorCode::Cancelled);
+        let e = classify(&InstallError::Integrity { paths: vec!["a".into()] }, None);
+        assert_eq!((e.code, e.paths), (ErrorCode::Integrity, vec!["a".to_string()]));
+    }
 }

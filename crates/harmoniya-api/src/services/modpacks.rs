@@ -2,7 +2,6 @@ use anyhow::{Result, anyhow};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::http;
-use crate::services::options;
 
 const CMS_GRAPHQL_URL: &str = "https://one.harmoniya.net/api/graphql";
 /// Where `banner`/`logo` R2 object keys resolve to — same bypass-Access path
@@ -11,20 +10,12 @@ const FILES_BASE_URL: &str = "https://one.harmoniya.net/files";
 
 const QUERY: &str = r#"query Modpacks {
   modpacks {
-    id title summary version manifestUrl maintaining order description
+    id title summary version bundleUrl maintaining order description
     banner
     status { online max }
     servers { title }
     project { id title order logo }
     announcements { body date }
-    options {
-      type name title subtitle min max step unit placeholder default
-      choices { label value }
-      options {
-        type name title subtitle min max step unit placeholder default
-        choices { label value }
-      }
-    }
   }
 }"#;
 
@@ -77,7 +68,9 @@ pub struct Modpack {
     pub title: String,
     #[serde(default)] pub summary: Option<String>,
     #[serde(default)] pub version: Option<String>,
-    #[serde(rename = "manifestUrl")] pub manifest_url: String,
+    /// The modpack's published opys bundle. Its head carries the options a
+    /// player may set, read by `harmoniya_launch::options::read_head`.
+    #[serde(rename = "bundleUrl")] pub bundle_url: String,
     #[serde(default)] pub banner: Option<ModpackBanner>,
     #[serde(default)] pub maintaining: bool,
     #[serde(default)] pub order: i32,
@@ -85,7 +78,6 @@ pub struct Modpack {
     #[serde(default)] pub status: Option<ServerStatus>,
     pub project: Project,
     #[serde(default, deserialize_with = "null_default")] pub announcements: Vec<ModpackAnnouncement>,
-    #[serde(default)] pub options: Vec<options::Field>,
 }
 
 #[derive(Clone, Debug)]
@@ -105,7 +97,7 @@ struct RawModpack {
     title: String,
     #[serde(default)] summary: String,
     #[serde(default)] version: String,
-    #[serde(rename = "manifestUrl")] manifest_url: String,
+    #[serde(rename = "bundleUrl")] bundle_url: String,
     #[serde(default)] maintaining: bool,
     #[serde(default)] order: i32,
     #[serde(default)] description: String,
@@ -114,7 +106,6 @@ struct RawModpack {
     #[serde(default)] servers: Vec<RawServerRef>,
     project: RawProject,
     #[serde(default, deserialize_with = "null_default")] announcements: Vec<ModpackAnnouncement>,
-    #[serde(default)] options: Vec<options::Field>,
 }
 
 #[derive(Deserialize)]
@@ -147,7 +138,7 @@ impl RawModpack {
             title: self.title,
             summary: (!self.summary.is_empty()).then_some(self.summary),
             version: (!self.version.is_empty()).then_some(self.version),
-            manifest_url: self.manifest_url,
+            bundle_url: self.bundle_url,
             banner: file_url(&self.banner).map(|url| ModpackBanner { url: Some(url) }),
             maintaining: self.maintaining,
             order: self.order,
@@ -164,7 +155,6 @@ impl RawModpack {
                 logo: ProjectLogo { url: file_url(&self.project.logo) },
             },
             announcements: self.announcements,
-            options: self.options,
         }
     }
 }
@@ -233,8 +223,7 @@ mod tests {
     use super::*;
 
     /// One real modpack's shape from `one.harmoniya.net/api/graphql` (banner/
-    /// logo as bare R2 keys, `status` always present, `announcements: null`,
-    /// options with `choices`/`options` null on non-select/non-feature rows)
+    /// logo as bare R2 keys, `status` always present, `announcements: null`)
     /// plus a second, server-less entry to exercise the "no status" path.
     const RESPONSE: &str = r##"{
       "data": {
@@ -242,17 +231,9 @@ mod tests {
           {
             "id": "arcanetech", "title": "ArcaneTech", "summary": "Палічка та ваджра",
             "version": "1.7.10",
-            "manifestUrl": "https://gitlab.com/harmoniya/modpacks/arcanetech/client/-/jobs/artifacts/main/raw/manifest.json?job=publish",
+            "bundleUrl": "https://gitlab.com/api/v4/projects/87490662/packages/generic/arcanetech/main/client.opys",
             "maintaining": false, "order": 1, "description": "# ArcaneTech",
             "banner": "banners/faf0cbfc-84db-44a4-94b7-639ea5be1e06.png",
-            "options": [
-              {"type":"slider","name":"xmx","title":"RAM","subtitle":"Скільки RAM виділяти грі",
-               "min":2048,"max":16384,"step":1024,"unit":"МБ","placeholder":null,"default":"4096",
-               "choices":null,"options":null},
-              {"type":"feature","name":"potato_pc_fix","title":"Сумісність зі старим залізом","subtitle":null,
-               "min":null,"max":null,"step":null,"unit":null,"placeholder":null,"default":"false",
-               "choices":null,"options":null}
-            ],
             "announcements": null,
             "project": {"id":"harmoniya","title":"Harmoniya","order":0,"logo":"logos/ef5a5670-2674-43b8-9f80-efef15e5550f.svg"},
             "servers": [{"title":"Main"}],
@@ -260,8 +241,8 @@ mod tests {
           },
           {
             "id": "upcoming", "title": "Upcoming", "summary": "", "version": "",
-            "manifestUrl": "", "maintaining": false, "order": 2, "description": "",
-            "banner": "", "options": [], "announcements": null,
+            "bundleUrl": "", "maintaining": false, "order": 2, "description": "",
+            "banner": "", "announcements": null,
             "project": {"id":"harmoniya","title":"Harmoniya","order":0,"logo":""},
             "servers": [],
             "status": {"online": 0, "max": 0}
@@ -289,7 +270,10 @@ mod tests {
         );
         assert!(m.status.is_some(), "has a server -> status carries the live ping result");
         assert_eq!(m.status.as_ref().unwrap().online, 1);
-        assert_eq!(m.options.len(), 2);
+        assert_eq!(
+            m.bundle_url,
+            "https://gitlab.com/api/v4/projects/87490662/packages/generic/arcanetech/main/client.opys"
+        );
     }
 
     #[test]

@@ -13,6 +13,12 @@ impl AppState {
     }
 
     pub fn open_modal(&mut self, modal: ActiveModal, cx: &mut Context<Self>) {
+        // The settings form is drawn from the selected bundle's head.
+        if modal == ActiveModal::Settings {
+            if let Some(url) = self.selected_modpack().map(|m| m.bundle_url.clone()) {
+                self.load_bundle_head(url, cx);
+            }
+        }
         self.active_modal = Some(modal);
         cx.notify();
     }

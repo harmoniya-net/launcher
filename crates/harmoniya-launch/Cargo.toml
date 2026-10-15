@@ -8,6 +8,8 @@ description = "Game install/launch pipeline (opys_runtime) and game process life
 [dependencies]
 harmoniya-api = { path = "../harmoniya-api" }
 opys-runtime = { workspace = true }
+opys-bundle = { workspace = true }
+serde = { workspace = true }
 tokio = { workspace = true }
 futures = { workspace = true }
 anyhow = { workspace = true }
@@ -19,3 +21,8 @@ tracing = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
+
+[dev-dependencies]
+# A test bundle is written with the same crates `opys build` writes one with.
+opys-core = "0.9.0"
+tempfile = "3"
