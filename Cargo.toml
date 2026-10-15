@@ -1,6 +1,6 @@
 [package]
 name = "harmoniya-launcher"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2021"
 publish = false
 
@@ -67,8 +67,8 @@ sha2 = "0.10"
 rand = "0.8"
 # opys: the runtime installs and launches a bundle; the bundle crate is where
 # its head — the options a player may set — is typed.
-opys-runtime = "0.9.0"
-opys-bundle = "0.9.0"
+opys-runtime = "0.9.1"
+opys-bundle = "0.9.1"
 libc = "0.2"
 
 [dependencies]
