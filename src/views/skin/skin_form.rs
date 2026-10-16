@@ -200,7 +200,7 @@ impl Render for SkinForm {
                         }),
                     )
                     .child(
-                        reset_link(t.reset_cape, !saving && can_cape && profile_cape.is_some(), move |_, _, cx| {
+                        reset_link(t.reset_cape, !saving && profile_cape.is_some(), move |_, _, cx| {
                             reset_cape_handle.update(cx, |this, cx| this.reset(Kind::Cape, cx));
                         }),
                     ),
