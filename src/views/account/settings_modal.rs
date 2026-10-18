@@ -525,37 +525,44 @@ impl Render for SettingsModal {
 
         // While a slider is dragged, track the cursor at the window level so it
         // follows horizontal movement even when the pointer leaves the slider
-        // row. Only x is used; vertical motion is ignored.
+        // row. Only x is used; vertical motion is ignored. gpui only accepts
+        // window-level listeners during paint, so they're registered from a
+        // zero-size canvas's paint callback rather than here in `render`.
         if self.slider_drag.is_some() {
             let this = cx.entity();
-            window.on_mouse_event({
-                let this = this.clone();
-                move |e: &MouseMoveEvent, phase, _window, cx| {
+            let register = move |window: &mut Window| {
+                window.on_mouse_event({
+                    let this = this.clone();
+                    move |e: &MouseMoveEvent, phase, _window, cx| {
+                        if phase != DispatchPhase::Capture {
+                            return;
+                        }
+                        this.update(cx, |modal, cx| {
+                            let Some(drag) = modal.slider_drag.clone() else { return };
+                            if e.pressed_button == Some(MouseButton::Left) {
+                                modal.apply_slider(e.position.x, &drag, cx);
+                            } else {
+                                // Button released off-window (no mouse-up reached us).
+                                modal.slider_drag = None;
+                                cx.notify();
+                            }
+                        });
+                    }
+                });
+                window.on_mouse_event(move |_e: &MouseUpEvent, phase, _window, cx| {
                     if phase != DispatchPhase::Capture {
                         return;
                     }
                     this.update(cx, |modal, cx| {
-                        let Some(drag) = modal.slider_drag.clone() else { return };
-                        if e.pressed_button == Some(MouseButton::Left) {
-                            modal.apply_slider(e.position.x, &drag, cx);
-                        } else {
-                            // Button released off-window (no mouse-up reached us).
-                            modal.slider_drag = None;
+                        if modal.slider_drag.take().is_some() {
                             cx.notify();
                         }
                     });
-                }
-            });
-            window.on_mouse_event(move |_e: &MouseUpEvent, phase, _window, cx| {
-                if phase != DispatchPhase::Capture {
-                    return;
-                }
-                this.update(cx, |modal, cx| {
-                    if modal.slider_drag.take().is_some() {
-                        cx.notify();
-                    }
                 });
-            });
+            };
+            col = col.child(
+                canvas(|_, _, _| {}, move |_, _, window, _| register(window)).absolute().size_0(),
+            );
         }
 
         Modal::new(col)
