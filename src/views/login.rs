@@ -21,14 +21,17 @@ impl LoginView {
 
 impl Render for LoginView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let state_handle = self.state.clone();
-        let harmoniya_handle = state_handle.clone();
-        let discord_handle = state_handle;
-        let login_error = match &self.state.read(cx).login_phase {
-            LoginPhase::Error(msg) => Some(msg.clone()),
-            _ => None,
+        let (login_error, awaiting_code) = match &self.state.read(cx).login_phase {
+            LoginPhase::Error(msg) => (Some(msg.clone()), None),
+            LoginPhase::AwaitingApproval { user_code, .. } => (None, Some(user_code.clone())),
+            LoginPhase::Idle | LoginPhase::Starting => (None, None),
         };
         let t = crate::i18n::t();
+        // While a code waits for approval it replaces the sign-in buttons.
+        let actions = match awaiting_code {
+            Some(code) => awaiting_panel(&self.state, code),
+            None => sign_in_buttons(&self.state),
+        };
 
         div()
             .flex()
@@ -81,28 +84,7 @@ impl Render for LoginView {
                                     .flex_col()
                                     .gap(px(6.))
                                     .w_full()
-                                    .child(login_button(
-                                        t.login_harmoniya,
-                                        "harmoniya-btn",
-                                        "icons/harmoniya.svg",
-                                        Theme::on_accent().into(),
-                                        move |_, _, cx| {
-                                            harmoniya_handle.update(cx, |s, cx| {
-                                                s.login(Provider::Harmoniya, cx);
-                                            });
-                                        },
-                                    ))
-                                    .child(login_button(
-                                        t.login_discord,
-                                        "discord-btn",
-                                        "icons/discord.svg",
-                                        Theme::on_accent().into(),
-                                        move |_, _, cx| {
-                                            discord_handle.update(cx, |s, cx| {
-                                                s.login(Provider::Discord, cx);
-                                            });
-                                        },
-                                    ))
+                                    .child(actions)
                                     .when_some(login_error, |col, msg| {
                                         col.child(
                                             div()
@@ -147,6 +129,110 @@ impl Render for LoginView {
                     .children(crate::widgets::corner_mask::corner_masks(Theme::radius_panel())),
             )
     }
+}
+
+fn sign_in_buttons(state: &Entity<AppState>) -> gpui::AnyElement {
+    let t = crate::i18n::t();
+    let harmoniya_handle = state.clone();
+    let discord_handle = state.clone();
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(6.))
+        .w_full()
+        .child(login_button(
+            t.login_harmoniya,
+            "harmoniya-btn",
+            "icons/harmoniya.svg",
+            Theme::on_accent().into(),
+            move |_, _, cx| {
+                harmoniya_handle.update(cx, |s, cx| {
+                    s.login(Provider::Harmoniya, cx);
+                });
+            },
+        ))
+        .child(login_button(
+            t.login_discord,
+            "discord-btn",
+            "icons/discord.svg",
+            Theme::on_accent().into(),
+            move |_, _, cx| {
+                discord_handle.update(cx, |s, cx| {
+                    s.login(Provider::Discord, cx);
+                });
+            },
+        ))
+        .into_any_element()
+}
+
+/// The code to approve in the browser, so the user can check it matches the
+/// page, plus ways out if the tab got lost or they changed their mind.
+fn awaiting_panel(state: &Entity<AppState>, code: String) -> gpui::AnyElement {
+    let t = crate::i18n::t();
+    let reopen_handle = state.clone();
+    let cancel_handle = state.clone();
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(8.))
+        .w_full()
+        .child(
+            div()
+                .text_size(px(14.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(Theme::text())
+                .child(t.login_waiting),
+        )
+        .child(
+            div()
+                .text_size(px(13.))
+                .text_color(Theme::text_muted())
+                .child(t.login_code_hint),
+        )
+        .child(
+            div()
+                .flex()
+                .justify_center()
+                .w_full()
+                .py(px(10.))
+                .bg(Theme::surface_raised())
+                .rounded(Theme::radius_block())
+                .font_family("monospace")
+                .text_size(px(26.))
+                .font_weight(FontWeight::BOLD)
+                .text_color(Theme::text())
+                .child(code),
+        )
+        .child(
+            div()
+                .flex()
+                .justify_between()
+                .w_full()
+                .child(text_link(t.login_reopen, "login-reopen", move |_, _, cx| {
+                    reopen_handle.read(cx).reopen_login_page();
+                }))
+                .child(text_link(t.login_cancel, "login-cancel", move |_, _, cx| {
+                    cancel_handle.update(cx, |s, cx| s.cancel_login(cx));
+                })),
+        )
+        .into_any_element()
+}
+
+fn text_link(
+    label: &'static str,
+    id: &'static str,
+    on_click: impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static,
+) -> gpui::AnyElement {
+    div()
+        .id(id)
+        .text_size(px(13.))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(Theme::text_muted())
+        .cursor_pointer()
+        .hover(|s| s.text_color(Theme::text()))
+        .on_mouse_down(MouseButton::Left, move |ev, w, cx| on_click(ev, w, cx))
+        .child(label)
+        .into_any_element()
 }
 
 fn login_button(

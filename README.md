@@ -48,7 +48,7 @@ Windows and macOS build with just the standard MSVC / Xcode toolchains — no ex
 
 A Cargo workspace: the binary (`src/`) plus three GPUI-free library crates —
 
-- **`crates/harmoniya-api`** — backend client: HTTP, config/data-dir persistence, OAuth2 + keyring auth, CMS/account/modpack services.
+- **`crates/harmoniya-api`** — backend client: HTTP, config/data-dir persistence, device-flow sign-in + keyring session, CMS/account/modpack services.
 - **`crates/harmoniya-launch`** — the install → spawn pipeline and running-game registry, built on `opys-runtime`.
 - **`crates/mc-skin`** — pure-`image` Minecraft skin rendering (head icons + the viewer rasterizer).
 

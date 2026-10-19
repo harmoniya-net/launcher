@@ -5,7 +5,7 @@ use std::sync::Arc;
 use gpui::{Context, Image, ImageFormat};
 use harmoniya_api::services::yggdrasil::{fetch_profile, SkinModel};
 
-use super::{fetch_image_bytes, is_auth_dead, with_access_token, AppEvent, AppState};
+use super::{fetch_image_bytes, is_auth_dead, with_token, AppEvent, AppState};
 
 impl AppState {
     pub fn current_skin_model(&self) -> SkinModel {
@@ -36,7 +36,7 @@ impl AppState {
         let store = self.session.clone();
         cx.spawn(async move |this, cx| {
             let result = harmoniya_api::http::on_tokio(
-                with_access_token(store, |t| async move {
+                with_token(store, |t| async move {
                     fetch_profile(&t).await.map(|opt| opt.unwrap_or_default())
                 })
             ).await;

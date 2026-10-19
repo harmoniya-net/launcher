@@ -18,7 +18,7 @@ use opys_runtime::{ErrorReport, InstallError, InstallOptions, InstallProgress, L
 /// Re-exported so the app can mint a token and cancel an in-flight install.
 pub use opys_runtime::CancellationToken;
 
-use harmoniya_api::auth::{self, TokenStore};
+use harmoniya_api::auth::{self, SessionStore};
 use harmoniya_api::services::account::fetch_me;
 
 use crate::options::{self, ModpackOptions};
@@ -219,7 +219,7 @@ fn launch_vars(player: &Player, root: &str, options: IndexMap<String, String>) -
 /// runtime (call via `harmoniya_api::http::on_tokio`). Reports everything over
 /// `tx`. Cancelling `cancel` aborts an in-flight install (downloads included).
 pub async fn run(
-    store: Arc<TokenStore>,
+    store: Arc<SessionStore>,
     modpack_id: String,
     bundle_url: String,
     data_dir: String,
@@ -252,7 +252,7 @@ pub async fn run(
 }
 
 async fn run_inner(
-    store: Arc<TokenStore>,
+    store: Arc<SessionStore>,
     modpack_id: String,
     bundle_url: String,
     data_dir: &str,
@@ -262,14 +262,10 @@ async fn run_inner(
     if let Some(cb) = &install.on_progress {
         cb(InstallProgress::Resolve);
     }
-    // The store owns refresh + rotation + persistence; we just ask for a token.
-    let access = store
-        .access_token()
-        .await
-        .map_err(|e| InstallError::other(format!("token refresh: {e:#}")))?;
+    let token = store.token().map_err(|e| InstallError::other(format!("{e:#}")))?;
 
-    let user = fetch_me(&access).await.map_err(|e| InstallError::other(format!("{e:#}")))?;
-    let ygg_token = auth::fetch_yggdrasil_token(&access)
+    let user = fetch_me(&token).await.map_err(|e| InstallError::other(format!("{e:#}")))?;
+    let ygg_token = auth::fetch_yggdrasil_token(&token)
         .await
         .map_err(|e| InstallError::other(format!("{e:#}")))?;
     let uuid = uuid_from_ygg(&ygg_token).map_err(|e| InstallError::other(format!("{e:#}")))?;

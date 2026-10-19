@@ -13,10 +13,10 @@ pub struct User {
     pub rank: Option<String>,
 }
 
-pub async fn fetch_me(access_token: &str) -> Result<User> {
+pub async fn fetch_me(session_token: &str) -> Result<User> {
     http::client()
         .get(format!("{ACCOUNT_SERVICE_BASE}/api/me"))
-        .bearer_auth(access_token)
+        .bearer_auth(session_token)
         .send()
         .await
         .map_err(|e| anyhow!("/api/me request: {}", crate::obs::cause_chain(&e)))?

@@ -2,7 +2,7 @@
 //!
 //! - [`http`] — process-wide tokio runtime + shared `reqwest` client.
 //! - [`config`] — config/data directories and atomic JSON persistence.
-//! - [`auth`] — OAuth2 PKCE login, token refresh (with rotation), keyring storage.
+//! - [`auth`] — device-flow sign-in, the session token store, keyring storage.
 //! - [`services`] — typed calls against the account service and the CMS
 //!   (one.harmoniya.net's public GraphQL API).
 //!
@@ -18,7 +18,7 @@ pub mod services;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Milliseconds since the Unix epoch (saturating to 0 if the clock predates it).
-/// One definition shared by token expiry, refresh, and the launch pipeline.
+/// One definition shared across the crate and the launch pipeline.
 pub fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

@@ -99,6 +99,12 @@ pub struct Strings {
     pub login_subtitle: &'static str,
     pub login_harmoniya: &'static str,
     pub login_discord: &'static str,
+    pub login_waiting: &'static str,
+    pub login_code_hint: &'static str,
+    pub login_reopen: &'static str,
+    pub login_cancel: &'static str,
+    pub login_denied: &'static str,
+    pub login_expired: &'static str,
 
     // Settings sidebar nav (shared with the tab titles)
     pub nav_back: &'static str,
@@ -241,6 +247,12 @@ static UK: Strings = Strings {
     login_subtitle: "Увійти в акаунт",
     login_harmoniya: "Увійти з Harmoniya",
     login_discord: "Увійти з Discord",
+    login_waiting: "Підтвердіть вхід у браузері",
+    login_code_hint: "Переконайтеся, що сторінка показує цей код:",
+    login_reopen: "Відкрити сторінку ще раз",
+    login_cancel: "Скасувати",
+    login_denied: "Вхід відхилено в браузері",
+    login_expired: "Час на підтвердження минув. Спробуйте ще раз.",
 
     nav_back: "Назад",
     skin: "Скін",
@@ -341,6 +353,12 @@ static EN: Strings = Strings {
     login_subtitle: "Log in to your account",
     login_harmoniya: "Sign in with Harmoniya",
     login_discord: "Sign in with Discord",
+    login_waiting: "Confirm sign-in in your browser",
+    login_code_hint: "Check that the page shows this code:",
+    login_reopen: "Open the page again",
+    login_cancel: "Cancel",
+    login_denied: "Sign-in was denied in the browser",
+    login_expired: "The code expired. Try again.",
 
     nav_back: "Back",
     skin: "Skin",

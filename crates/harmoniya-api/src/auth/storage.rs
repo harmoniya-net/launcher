@@ -1,34 +1,31 @@
+//! Persists the session token: the OS keyring when there is one, a file in the
+//! config dir otherwise.
+
 use anyhow::Result;
 use keyring::Entry;
 
-use super::tokens::Tokens;
 use crate::config;
 
 const SERVICE: &str = "harmoniya-launcher";
 const USER: &str = "session";
-const FILE: &str = "tokens.json";
+const FILE: &str = "session.json";
 
-pub fn load() -> Option<Tokens> {
-    if let Ok(entry) = Entry::new(SERVICE, USER) {
-        if let Ok(raw) = entry.get_password() {
-            if let Ok(t) = serde_json::from_str::<Tokens>(&raw) {
-                return Some(t);
-            }
-        }
+pub fn load() -> Option<String> {
+    if let Ok(token) = Entry::new(SERVICE, USER).and_then(|e| e.get_password()) {
+        return Some(token);
     }
-    config::load_json::<Tokens>(FILE)
+    config::load_json::<String>(FILE)
 }
 
-pub fn save(tokens: &Tokens) -> Result<()> {
-    let json = serde_json::to_string(tokens)?;
+pub fn save(token: &str) -> Result<()> {
     let keyring_ok = Entry::new(SERVICE, USER)
-        .and_then(|e| e.set_password(&json))
+        .and_then(|e| e.set_password(token))
         .is_ok();
-    if !keyring_ok {
-        tracing::warn!("keyring unavailable, falling back to file");
-        config::save_json(FILE, tokens)?;
-    } else {
+    if keyring_ok {
         let _ = std::fs::remove_file(config::config_path(FILE).unwrap_or_default());
+    } else {
+        tracing::warn!("keyring unavailable, falling back to file");
+        config::save_json(FILE, &token)?;
     }
     Ok(())
 }

@@ -54,3 +54,22 @@ where
 {
     handle().spawn(fut).await.expect("tokio task failed (panic or runtime gone)")
 }
+
+/// Like [`on_tokio`], but dropping the returned future aborts the tokio task
+/// (a plain `JoinHandle` detaches it instead). For long-running work the caller
+/// may cancel, such as polling for a sign-in approval.
+pub async fn on_tokio_abortable<F, T>(fut: F) -> T
+where
+    F: std::future::Future<Output = T> + Send + 'static,
+    T: Send + 'static,
+{
+    struct AbortOnDrop<T>(tokio::task::JoinHandle<T>);
+    impl<T> Drop for AbortOnDrop<T> {
+        fn drop(&mut self) {
+            self.0.abort();
+        }
+    }
+
+    let mut task = AbortOnDrop(handle().spawn(fut));
+    (&mut task.0).await.expect("tokio task failed (panic or runtime gone)")
+}

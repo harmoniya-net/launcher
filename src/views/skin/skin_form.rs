@@ -226,14 +226,14 @@ impl SkinForm {
 
         cx.spawn(async move |this, cx| {
             let res: anyhow::Result<()> = harmoniya_api::http::on_tokio(async move {
-                let access = store.access_token().await?;
+                let token = store.token()?;
                 if let Some((path, name)) = pending_skin {
                     let bytes = std::fs::read(&path)?;
-                    yggdrasil::upload_skin(&access, bytes, name, model).await?;
+                    yggdrasil::upload_skin(&token, bytes, name, model).await?;
                 }
                 if let Some((path, name)) = pending_cape {
                     let bytes = std::fs::read(&path)?;
-                    yggdrasil::upload_cape(&access, bytes, name).await?;
+                    yggdrasil::upload_cape(&token, bytes, name).await?;
                 }
                 Ok(())
             }).await;
@@ -268,10 +268,10 @@ impl SkinForm {
 
         cx.spawn(async move |this, cx| {
             let res: anyhow::Result<()> = harmoniya_api::http::on_tokio(async move {
-                let access = store.access_token().await?;
+                let token = store.token()?;
                 match kind {
-                    Kind::Skin => yggdrasil::reset_skin(&access).await?,
-                    Kind::Cape => yggdrasil::reset_cape(&access).await?,
+                    Kind::Skin => yggdrasil::reset_skin(&token).await?,
+                    Kind::Cape => yggdrasil::reset_cape(&token).await?,
                 }
                 Ok(())
             }).await;

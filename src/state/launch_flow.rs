@@ -33,9 +33,9 @@ impl AppState {
         });
     }
 
-    /// Bring the main window to the foreground and focus it — e.g. after the
-    /// browser OAuth flow completes, so the user lands back on the launcher
-    /// instead of the (auto-closing) success tab.
+    /// Bring the main window to the foreground and focus it — e.g. once a
+    /// sign-in is approved in the browser, so the user lands back on the
+    /// launcher.
     pub fn focus_window(&self, cx: &mut Context<Self>) {
         let Some(MainWindow(handle)) = cx.try_global::<MainWindow>() else { return };
         let handle = *handle;

@@ -1,184 +1,219 @@
-pub mod callback_server;
-pub mod pkce;
+//! Sign-in with the OAuth device flow (RFC 8628) against the account service.
+//!
+//! [`start_login`] asks for a code, the user approves it on the account site
+//! (we open the page for them), and [`DeviceLogin::wait`] polls until that
+//! happens. The result is a session token, which every authenticated call sends
+//! as `Authorization: Bearer`. There is no refresh token: the session slides
+//! forward while it's used, and a 401 means "sign in again".
+
 pub mod storage;
 pub mod store;
-pub mod tokens;
+
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
 use serde::Deserialize;
 use url::Url;
 
 use crate::http;
-use crate::now_ms;
-pub use store::TokenStore;
-use tokens::Tokens;
+use crate::obs::cause_chain;
+pub use store::SessionStore;
 
 pub const ACCOUNT_SERVICE_BASE: &str = "https://account.harmoniya.net";
-pub const OAUTH_CLIENT_ID: &str = "IMcNOJwJQpQLCTpqIdinmiUTMtJAHvPy";
-pub const OAUTH_SCOPE: &str = "openid email profile offline_access";
+/// Must match `LAUNCHER_CLIENT_ID` in the account service.
+const CLIENT_ID: &str = "launcher";
+const DEVICE_CODE_GRANT: &str = "urn:ietf:params:oauth:grant-type:device_code";
 
-#[derive(Debug, Deserialize)]
-struct RawTokens {
-    access_token: String,
-    refresh_token: Option<String>,
-    expires_in: Option<u64>,
-}
-
-/// An OAuth flow whose browser page has already been opened. Holds the loopback
-/// listener and PKCE state; await [`PendingLogin::finish`] for the redirect and
-/// token exchange. Split out from the open step so the UI can stop blocking the
-/// sign-in buttons as soon as the browser launches — the user can close the tab
-/// and retry instead of being stuck until the 5-minute callback timeout.
-pub struct PendingLogin {
-    listener: callback_server::CallbackListener,
-    verifier: String,
-    state: String,
-    redirect_uri: String,
-}
-
-/// Set up PKCE + the loopback listener and open the browser to the authorize
-/// URL. Returns as soon as the browser is launched (no blocking wait), so the
-/// caller can re-enable its UI; await [`PendingLogin::finish`] for the result.
-pub fn begin_login_flow(provider: Provider) -> Result<PendingLogin> {
-    let pkce = pkce::generate();
-    let state = pkce::random_state();
-    let listener = callback_server::start()?;
-    let port = listener.port();
-    // Match the path that's registered with the OAuth client (see existing Nuxt launcher).
-    let redirect_uri = format!("http://127.0.0.1:{port}/api/auth/callback");
-
-    let mut url = Url::parse(&format!("{ACCOUNT_SERVICE_BASE}/api/auth/oauth2/authorize"))?;
-    url.query_pairs_mut()
-        .append_pair("client_id", OAUTH_CLIENT_ID)
-        .append_pair("response_type", "code")
-        .append_pair("redirect_uri", &redirect_uri)
-        .append_pair("scope", provider.scope())
-        .append_pair("state", &state)
-        .append_pair("code_challenge", &pkce.challenge)
-        .append_pair("code_challenge_method", "S256");
-
-    if let Some(p) = provider.upstream_param() {
-        url.query_pairs_mut().append_pair("connection", p);
-    }
-
-    open::that(url.as_str()).context("open browser")?;
-
-    Ok(PendingLogin { listener, verifier: pkce.verifier, state, redirect_uri })
-}
-
-impl PendingLogin {
-    /// Block (≤5 min, on a blocking thread) for the loopback redirect, then
-    /// exchange the authorization code for tokens. Dropping the returned future
-    /// abandons the wait (the orphaned listener self-terminates at its timeout).
-    pub async fn finish(self) -> Result<Tokens> {
-        let PendingLogin { listener, verifier, state, redirect_uri } = self;
-        let captured = tokio::task::spawn_blocking(move || listener.wait_for_callback())
-            .await
-            .map_err(|_| anyhow!("callback thread panicked"))??;
-        if captured.state != state {
-            return Err(anyhow!("oauth state mismatch"));
-        }
-        let code = captured.code.ok_or_else(|| anyhow!("no code in callback"))?;
-        exchange_code(&code, &verifier, &redirect_uri).await
-    }
-}
-
-/// Full OAuth2 PKCE flow in one call (open browser, await callback, exchange).
-/// Equivalent to `begin_login_flow(provider)?.finish().await`.
-pub async fn run_login_flow(provider: Provider) -> Result<Tokens> {
-    begin_login_flow(provider)?.finish().await
-}
-
+#[derive(Clone, Copy)]
 pub enum Provider {
     Harmoniya,
     Discord,
 }
 
-impl Provider {
-    fn scope(&self) -> &'static str { OAUTH_SCOPE }
-    fn upstream_param(&self) -> Option<&'static str> {
-        match self {
-            Provider::Harmoniya => None,
-            Provider::Discord => Some("discord"),
-        }
-    }
+/// Why a device sign-in ended without a session.
+#[derive(Debug, thiserror::Error)]
+pub enum LoginError {
+    #[error("sign-in was denied in the browser")]
+    Denied,
+    #[error("sign-in code expired")]
+    Expired,
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
-async fn exchange_code(code: &str, verifier: &str, redirect_uri: &str) -> Result<Tokens> {
-    let form = [
-        ("grant_type", "authorization_code"),
-        ("code", code),
-        ("redirect_uri", redirect_uri),
-        ("client_id", OAUTH_CLIENT_ID),
-        ("code_verifier", verifier),
-    ];
-    let raw: RawTokens = http::client()
-        .post(format!("{ACCOUNT_SERVICE_BASE}/api/auth/oauth2/token"))
-        .form(&form)
+/// A sign-in waiting for the user to approve [`user_code`](Self::user_code) in
+/// the browser.
+pub struct DeviceLogin {
+    device_code: String,
+    /// The code as shown to the user, `ABCD-1234`; the approval page shows it too.
+    pub user_code: String,
+    /// The approval page with the code filled in.
+    pub verification_url: String,
+    interval: Duration,
+    expires_at: Instant,
+}
+
+/// Ask the account service for a device code. `provider` only picks which
+/// sign-in the approval page leads with when the browser isn't signed in yet.
+pub async fn start_login(provider: Provider) -> Result<DeviceLogin> {
+    #[derive(Deserialize)]
+    struct CodeResponse {
+        device_code: String,
+        user_code: String,
+        verification_uri_complete: String,
+        expires_in: u64,
+        interval: u64,
+    }
+
+    let r: CodeResponse = http::client()
+        .post(format!("{ACCOUNT_SERVICE_BASE}/api/auth/device/code"))
+        .json(&serde_json::json!({ "client_id": CLIENT_ID }))
         .send()
         .await
         // Fold reqwest's `source()` chain into the message: the bare error is
         // the opaque "error sending request for url (…)"; the real cause (DNS /
-        // connect refused / TLS-trust failure) is one level down. Keep the
-        // "token exchange:" prefix — it's what the login screen surfaces.
-        .map_err(|e| anyhow!("token exchange: {}", crate::obs::cause_chain(&e)))?
+        // connect refused / TLS-trust failure) is one level down.
+        .map_err(|e| anyhow!("sign-in: {}", cause_chain(&e)))?
         .error_for_status()
-        .map_err(|e| anyhow!("token exchange: {e}"))?
+        .map_err(|e| anyhow!("sign-in: {e}"))?
         .json()
-        .await?;
-    Ok(Tokens {
-        access_token: raw.access_token,
-        refresh_token: raw.refresh_token,
-        expires_at: now_ms() + raw.expires_in.unwrap_or(3600) * 1000,
+        .await
+        .map_err(|e| anyhow!("sign-in: decode device code: {e}"))?;
+
+    let mut url = Url::parse(&r.verification_uri_complete).context("sign-in: verification url")?;
+    if let Provider::Discord = provider {
+        url.query_pairs_mut().append_pair("provider", "discord");
+    }
+
+    Ok(DeviceLogin {
+        device_code: r.device_code,
+        user_code: format_user_code(&r.user_code),
+        verification_url: url.into(),
+        interval: Duration::from_secs(r.interval.max(1)),
+        expires_at: Instant::now() + Duration::from_secs(r.expires_in),
     })
 }
 
-/// Exchange a refresh token for a fresh token set. The account service rotates:
-/// a successful call **revokes** `refresh_token` and returns a new one. Callers
-/// must go through [`TokenStore`] so the rotation is always persisted; replaying
-/// a revoked token deletes the whole token family server-side. We keep the old
-/// refresh token if the server omits one (non-rotating fallback).
-pub(crate) async fn refresh_tokens(refresh_token: &str) -> Result<Tokens> {
-    let form = [
-        ("grant_type", "refresh_token"),
-        ("refresh_token", refresh_token),
-        ("client_id", OAUTH_CLIENT_ID),
-    ];
-    let resp = http::client()
-        .post(format!("{ACCOUNT_SERVICE_BASE}/api/auth/oauth2/token"))
-        .form(&form)
+impl DeviceLogin {
+    pub fn open_browser(&self) -> Result<()> {
+        open::that(&self.verification_url).context("open browser")
+    }
+
+    /// Poll until the user approves or denies the code, or it expires. Returns
+    /// the session token. Network hiccups don't end the wait; the code's expiry
+    /// does.
+    pub async fn wait(self) -> Result<String, LoginError> {
+        #[derive(Deserialize)]
+        struct TokenResponse {
+            access_token: String,
+        }
+        #[derive(Deserialize)]
+        struct ErrorResponse {
+            error: String,
+        }
+
+        let mut interval = self.interval;
+        loop {
+            tokio::time::sleep(interval).await;
+            if Instant::now() >= self.expires_at {
+                return Err(LoginError::Expired);
+            }
+
+            let resp = http::client()
+                .post(format!("{ACCOUNT_SERVICE_BASE}/api/auth/device/token"))
+                .json(&serde_json::json!({
+                    "grant_type": DEVICE_CODE_GRANT,
+                    "device_code": self.device_code,
+                    "client_id": CLIENT_ID,
+                }))
+                .send()
+                .await;
+            let resp = match resp {
+                Ok(r) => r,
+                Err(e) => {
+                    tracing::warn!(error = %cause_chain(&e), "device token poll failed");
+                    continue;
+                }
+            };
+
+            let status = resp.status();
+            if status.is_success() {
+                let body: TokenResponse = resp
+                    .json()
+                    .await
+                    .map_err(|e| anyhow!("sign-in: decode token: {e}"))?;
+                return Ok(body.access_token);
+            }
+            if status.is_server_error() {
+                tracing::warn!(%status, "device token poll failed");
+                continue;
+            }
+
+            let body = resp.text().await.unwrap_or_default();
+            let error = serde_json::from_str::<ErrorResponse>(&body)
+                .map(|e| e.error)
+                .unwrap_or_default();
+            match error.as_str() {
+                "authorization_pending" => {}
+                // RFC 8628 §3.5: back off by 5 seconds for every slow_down.
+                "slow_down" => interval += Duration::from_secs(5),
+                "access_denied" => return Err(LoginError::Denied),
+                "expired_token" => return Err(LoginError::Expired),
+                _ => return Err(anyhow!("sign-in: HTTP {status}: {body}").into()),
+            }
+        }
+    }
+}
+
+/// Revoke the session server-side. Signing out locally doesn't depend on it.
+pub async fn sign_out(token: &str) -> Result<()> {
+    http::client()
+        .post(format!("{ACCOUNT_SERVICE_BASE}/api/auth/sign-out"))
+        .bearer_auth(token)
+        .json(&serde_json::json!({}))
         .send()
         .await
-        // Surface the transport cause (see `exchange_code`). The "refresh:"
-        // prefix is load-bearing: `state::is_auth_dead` matches on it.
-        .map_err(|e| anyhow!("refresh: {}", crate::obs::cause_chain(&e)))?;
-    let status = resp.status();
-    let body = resp.text().await.unwrap_or_default();
-    if !status.is_success() {
-        return Err(anyhow!("refresh: HTTP {status}: {body}"));
-    }
-    let raw: RawTokens = serde_json::from_str(&body)
-        .map_err(|e| anyhow!("refresh: decode response: {e} (body: {body})"))?;
-    Ok(Tokens {
-        access_token: raw.access_token,
-        refresh_token: raw.refresh_token.or(Some(refresh_token.to_string())),
-        expires_at: now_ms() + raw.expires_in.unwrap_or(3600) * 1000,
-    })
+        .map_err(|e| anyhow!("sign-out: {}", cause_chain(&e)))?
+        .error_for_status()
+        .map_err(|e| anyhow!("sign-out: {e}"))?;
+    Ok(())
 }
 
-pub async fn fetch_yggdrasil_token(access_token: &str) -> Result<String> {
+pub async fn fetch_yggdrasil_token(token: &str) -> Result<String> {
     #[derive(Deserialize)]
-    struct R { token: Option<String> }
+    struct R {
+        token: Option<String>,
+    }
     let r: R = http::client()
         .post(format!("{ACCOUNT_SERVICE_BASE}/api/bifrost"))
-        .bearer_auth(access_token)
+        .bearer_auth(token)
         .send()
         .await
-        // Surface the transport cause (see `exchange_code`).
-        .map_err(|e| anyhow!("bifrost: {}", crate::obs::cause_chain(&e)))?
+        .map_err(|e| anyhow!("bifrost: {}", cause_chain(&e)))?
         .error_for_status()
         .map_err(|e| anyhow!("bifrost: {e}"))?
         .json()
         .await?;
     r.token.ok_or_else(|| anyhow!("no bifrost token in response"))
+}
+
+/// The account service hands out bare 8-character codes; show them as
+/// `ABCD-1234`, like the approval page does.
+fn format_user_code(code: &str) -> String {
+    if code.len() == 8 && code.is_ascii() {
+        format!("{}-{}", &code[..4], &code[4..])
+    } else {
+        code.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_user_code;
+
+    #[test]
+    fn user_code_is_split_in_halves() {
+        assert_eq!(format_user_code("ABCD1234"), "ABCD-1234");
+        assert_eq!(format_user_code("ABC"), "ABC");
+    }
 }

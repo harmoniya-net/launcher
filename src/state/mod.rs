@@ -1,6 +1,6 @@
 //! The single application model. `AppState` is one GPUI `Entity` that the whole
 //! UI observes; its behavior is split across this module by concern:
-//! - [`session`] — login/logout, token refresh, the current user.
+//! - [`session`] — sign-in/sign-out and the current user.
 //! - [`catalog`] — modpack list, groups, favourites, banner prefetch, bundle
 //!   heads (each modpack's options) and the player's option choices.
 //! - [`launch_flow`] — the play/install/launch flow and window hide-to-tray.
@@ -17,7 +17,7 @@ use futures::StreamExt;
 use gpui::{App, AppContext, Entity, EventEmitter, Global, Image, ImageFormat, Task};
 use serde::{Deserialize, Serialize};
 
-use harmoniya_api::auth::{self, TokenStore};
+use harmoniya_api::auth::{self, SessionStore};
 use harmoniya_api::config;
 use harmoniya_api::services::{
     account::User,
@@ -103,7 +103,10 @@ pub struct BundleHead {
 #[derive(Clone, Debug)]
 pub enum LoginPhase {
     Idle,
-    Waiting,
+    /// Asking the account service for a sign-in code.
+    Starting,
+    /// Waiting for the user to approve `user_code` on the page at `url`.
+    AwaitingApproval { user_code: String, url: String },
     Error(String),
 }
 
@@ -121,10 +124,8 @@ pub struct AppState {
     pub route: Route,
     /// When set, the auto-updater has taken over the window (see [`UpdatePhase`]).
     pub update: Option<UpdatePhase>,
-    /// The sole owner of the session's OAuth tokens. Consumers ask it for an
-    /// access token (`session.access_token().await`); the refresh token never
-    /// leaves it, so rotation can't be mishandled. See [`TokenStore`].
-    pub session: Arc<TokenStore>,
+    /// The sole owner of the session token; see [`SessionStore`].
+    pub session: Arc<SessionStore>,
     pub user: Option<User>,
     pub modpacks: Vec<Modpack>,
     pub groups: Vec<ProjectGroup>,
@@ -149,6 +150,7 @@ pub struct AppState {
     /// checks reduce to a pointer compare.
     pub preview_skin_bytes: Option<Arc<Vec<u8>>>,
     pub preview_cape_bytes: Option<Arc<Vec<u8>>>,
+    /// The in-flight sign-in. Dropping it cancels the sign-in.
     pub pending_login_task: Option<Task<()>>,
     /// Current game install/launch state, driving the launch modal.
     pub launch_state: LaunchState,
@@ -206,7 +208,7 @@ impl AppState {
         let settings: Settings = config::load_json(config::SETTINGS_FILE).unwrap_or_default();
         // Activate the persisted language before any view (or the tray) renders.
         crate::i18n::set(settings.language);
-        let session = auth::TokenStore::load();
+        let session = auth::SessionStore::load();
 
         let entity = cx.new(|_| AppState {
             route: if session.signed_in() { Route::Account } else { Route::Login },
@@ -296,41 +298,22 @@ impl AppState {
 
 // ── Shared helpers used across the concern submodules ───────────────────────
 
-/// Run an authenticated request: mint a fresh access token from the store, hand
-/// it to `f`, and on a 401/403 refresh once and retry. The store owns rotation +
-/// persistence, so call sites only ever see an access-token string — there's no
-/// rotated token to forget to adopt.
-async fn with_access_token<T, F, Fut>(store: Arc<TokenStore>, f: F) -> anyhow::Result<T>
+/// Run an authenticated request with the session token. Fails with an `auth:`
+/// error when signed out.
+async fn with_token<T, F, Fut>(store: Arc<SessionStore>, f: F) -> anyhow::Result<T>
 where
-    F: Fn(String) -> Fut,
+    F: FnOnce(String) -> Fut,
     Fut: std::future::Future<Output = anyhow::Result<T>>,
 {
-    let access = store.access_token().await?;
-    match f(access.clone()).await {
-        Ok(v) => Ok(v),
-        // The token may have been invalidated server-side mid-call; refresh once
-        // (compare-and-swap, so concurrent retries don't double-rotate) and retry.
-        Err(e) if is_unauthorized(&e) => {
-            let access = store.refresh_if_stale(&access).await?;
-            f(access).await
-        }
-        Err(e) => Err(e),
-    }
+    f(store.token()?).await
 }
 
-/// Whether an error from a protected endpoint looks like an auth rejection
-/// (worth a refresh-and-retry) rather than a transient/other failure.
-fn is_unauthorized(err: &anyhow::Error) -> bool {
-    let msg = err.to_string();
-    msg.contains("401") || msg.contains("403")
-}
-
-/// True when an error from [`with_access_token`] means the session can't be
-/// salvaged: either the refresh-token endpoint rejected us, or a protected
-/// endpoint returned 401/403 even with a fresh access token.
+/// True when an error from [`with_token`] means the session is gone: we're
+/// signed out, or the account service rejected the token (expired or revoked —
+/// there is no refresh, so the user has to sign in again).
 fn is_auth_dead(err: &anyhow::Error) -> bool {
     let msg = err.to_string();
-    msg.starts_with("refresh:") || msg.contains("401") || msg.contains("403")
+    msg.starts_with("auth:") || msg.contains("401") || msg.contains("403")
 }
 
 async fn fetch_image_bytes(url: &str) -> anyhow::Result<Vec<u8>> {

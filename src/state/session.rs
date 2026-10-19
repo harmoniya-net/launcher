@@ -1,19 +1,18 @@
-//! Authentication: OAuth login, logout, and loading the current user.
+//! Authentication: device-flow sign-in, sign-out, and loading the current user.
 
 use gpui::Context;
-use harmoniya_api::auth;
+use harmoniya_api::auth::{self, LoginError};
+use harmoniya_api::http::{on_tokio, on_tokio_abortable};
 use harmoniya_api::services::account::fetch_me;
 
-use super::{is_auth_dead, with_access_token, AppEvent, AppState, LoginPhase, Route};
+use super::{is_auth_dead, with_token, AppEvent, AppState, LoginPhase, Route};
 
 impl AppState {
     pub fn fetch_user(&mut self, cx: &mut Context<Self>) {
         if !self.session.signed_in() { return; }
         let store = self.session.clone();
         cx.spawn(async move |this, cx| {
-            let result = harmoniya_api::http::on_tokio(
-                with_access_token(store, |t| async move { fetch_me(&t).await })
-            ).await;
+            let result = on_tokio(with_token(store, |t| async move { fetch_me(&t).await })).await;
             this.update(cx, |state, cx| {
                 match result {
                     Ok(user) => {
@@ -30,18 +29,18 @@ impl AppState {
         }).detach();
     }
 
+    /// Start a device-flow sign-in: get a code, open the approval page, and
+    /// poll in the background until the user approves it there.
     pub fn login(&mut self, provider: auth::Provider, cx: &mut Context<Self>) {
-        // `Waiting` now covers only the brief browser-open step, so this guard
-        // just debounces a rapid double-click — it does NOT block for the whole
-        // auth. Once the page is open we drop back to `Idle` (below), so closing
-        // the tab and clicking again starts a fresh flow instead of hanging.
-        if matches!(self.login_phase, LoginPhase::Waiting) { return; }
-        self.login_phase = LoginPhase::Waiting;
+        // Debounce a double-click while the code is requested. Clicking again
+        // while waiting for approval starts over: replacing
+        // `pending_login_task` below drops (cancels) the previous attempt.
+        if matches!(self.login_phase, LoginPhase::Starting) { return; }
+        self.login_phase = LoginPhase::Starting;
         cx.notify();
         let handle = cx.spawn(async move |this, cx| {
-            // Step 1 — open the browser. Fast and non-blocking (no callback wait).
-            let pending = match auth::begin_login_flow(provider) {
-                Ok(p) => p,
+            let login = match on_tokio(auth::start_login(provider)).await {
+                Ok(login) => login,
                 Err(e) => {
                     this.update(cx, |state, cx| {
                         state.pending_login_task = None;
@@ -51,36 +50,43 @@ impl AppState {
                     return;
                 }
             };
-            // Page is open — unblock the buttons immediately so the user can
-            // retry or switch provider if they close the tab.
+            // The code and a "open again" link stay on screen, so a browser
+            // that didn't open isn't fatal.
+            if let Err(e) = login.open_browser() {
+                tracing::warn!(error = %e, "failed to open the sign-in page");
+            }
             if this.update(cx, |state, cx| {
-                state.login_phase = LoginPhase::Idle;
+                state.login_phase = LoginPhase::AwaitingApproval {
+                    user_code: login.user_code.clone(),
+                    url: login.verification_url.clone(),
+                };
                 cx.notify();
             }).is_err() {
                 return;
             }
-            // Step 2 — await the redirect + token exchange in the background.
-            let result = harmoniya_api::http::on_tokio(pending.finish()).await;
+
+            // Abortable, so cancelling the sign-in stops the polling too.
+            let result = on_tokio_abortable(login.wait()).await;
             this.update(cx, |state, cx| {
                 state.pending_login_task = None;
                 match result {
-                    Ok(tokens) => {
-                        state.session.set(tokens);
+                    Ok(token) => {
+                        state.session.set(token);
                         state.login_phase = LoginPhase::Idle;
                         state.set_route(Route::Account, cx);
                         cx.emit(AppEvent::AuthChanged);
-                        // The browser stole focus during OAuth; pull the launcher
-                        // back to the front (the success tab closes shortly after).
+                        // The user approved in the browser; bring the launcher back.
                         state.focus_window(cx);
                     }
                     Err(e) => {
-                        // Only surface the failure if we're still signed out — a
-                        // newer attempt or a completed login shouldn't be clobbered
-                        // by a stale flow's timeout.
-                        if !state.session.signed_in() {
-                            state.login_phase = LoginPhase::Error(e.to_string());
-                            cx.notify();
-                        }
+                        let t = crate::i18n::t();
+                        let msg = match e {
+                            LoginError::Denied => t.login_denied.to_string(),
+                            LoginError::Expired => t.login_expired.to_string(),
+                            LoginError::Other(e) => e.to_string(),
+                        };
+                        state.login_phase = LoginPhase::Error(msg);
+                        cx.notify();
                     }
                 }
             }).ok();
@@ -88,8 +94,31 @@ impl AppState {
         self.pending_login_task = Some(handle);
     }
 
+    /// Abandon the sign-in that is waiting for approval.
+    pub fn cancel_login(&mut self, cx: &mut Context<Self>) {
+        self.pending_login_task = None;
+        self.login_phase = LoginPhase::Idle;
+        cx.notify();
+    }
+
+    /// Open the approval page again, e.g. after the user closed the tab.
+    pub fn reopen_login_page(&self) {
+        if let LoginPhase::AwaitingApproval { url, .. } = &self.login_phase {
+            if let Err(e) = open::that(url) {
+                tracing::warn!(error = %e, "failed to open the sign-in page");
+            }
+        }
+    }
+
     pub fn logout(&mut self, cx: &mut Context<Self>) {
-        self.session.clear();
+        if let Some(token) = self.session.take() {
+            // Best effort: the local session is already gone either way.
+            harmoniya_api::http::handle().spawn(async move {
+                if let Err(e) = auth::sign_out(&token).await {
+                    tracing::warn!(error = %harmoniya_api::obs::Chain(&e), "sign-out failed");
+                }
+            });
+        }
         self.user = None;
         self.lucky_profile = None;
         self.skin_profile = None;

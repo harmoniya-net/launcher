@@ -3,7 +3,7 @@ name = "harmoniya-api"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Harmoniya backend client: OAuth2 auth, account/modpack/skin services, shared HTTP runtime."
+description = "Harmoniya backend client: device-flow auth, account/modpack/skin services, shared HTTP runtime."
 
 [dependencies]
 anyhow = { workspace = true }
@@ -20,7 +20,4 @@ indexmap = { workspace = true }
 serde_urlencoded = { workspace = true }
 percent-encoding = { workspace = true }
 keyring = { workspace = true }
-tiny_http = { workspace = true }
 open = { workspace = true }
-sha2 = { workspace = true }
-rand = { workspace = true }

@@ -52,7 +52,7 @@ impl fmt::Display for Chain<'_> {
 /// UnknownIssuer` — lives one or more `source()` levels down and is otherwise
 /// lost. Folding the chain into the message (rather than attaching it via
 /// `.context()`) keeps the outer prefix intact, which the auth-failure
-/// classifiers in the launcher match on (`starts_with("refresh:")`, etc.).
+/// classifiers in the launcher match on.
 pub fn cause_chain<E: std::error::Error + ?Sized>(err: &E) -> String {
     use std::fmt::Write as _;
     let mut out = err.to_string();
