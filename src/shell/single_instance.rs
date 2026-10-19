@@ -23,19 +23,20 @@ use single_instance::SingleInstance;
 /// agree on it. Loopback-only (127.0.0.1), so no firewall prompt; a clash with
 /// unrelated software just disables activation (the OS lock still enforces
 /// single-instance and the app still runs).
-const FOCUS_PORT: u16 = 56729;
+///
+/// Debug builds use the next port and their own lock name (below), so a dev
+/// build runs next to an installed launcher instead of focusing it and exiting.
+const FOCUS_PORT: u16 = if cfg!(debug_assertions) { 56730 } else { 56729 };
 
 /// Identifier for the lock. On macOS the crate treats the name as a filesystem
 /// path to `flock`, so give it an absolute path under the temp dir there; on
 /// Windows/Linux it's a mutex / abstract-socket name, where reverse-DNS is fine.
 fn lock_name() -> String {
+    let id = if cfg!(debug_assertions) { "net.harmoniya.launcher.dev" } else { "net.harmoniya.launcher" };
     #[cfg(target_os = "macos")]
-    let name = std::env::temp_dir()
-        .join("net.harmoniya.launcher.lock")
-        .to_string_lossy()
-        .into_owned();
+    let name = std::env::temp_dir().join(format!("{id}.lock")).to_string_lossy().into_owned();
     #[cfg(not(target_os = "macos"))]
-    let name = "net.harmoniya.launcher".to_string();
+    let name = id.to_string();
     name
 }
 

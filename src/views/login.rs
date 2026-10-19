@@ -26,6 +26,7 @@ impl Render for LoginView {
             LoginPhase::AwaitingApproval { user_code, .. } => (None, Some(user_code.clone())),
             LoginPhase::Idle | LoginPhase::Starting => (None, None),
         };
+        let manual_update = self.state.read(cx).manual_update.clone();
         let t = crate::i18n::t();
         // While a code waits for approval it replaces the sign-in buttons.
         let actions = match awaiting_code {
@@ -45,6 +46,7 @@ impl Render for LoginView {
             .child(
                 // Left panel
                 div()
+                    .relative()
                     .flex()
                     .flex_col()
                     .items_center()
@@ -61,21 +63,28 @@ impl Render for LoginView {
                             .items_start()
                             .gap(px(6.))
                             .w(px(232.))
+                            // Title and subtitle read as one heading: no gap, and
+                            // a tight line height on the big title.
                             .child(
                                 div()
-                                    .text_size(px(42.))
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(Theme::text())
+                                    .flex()
+                                    .flex_col()
                                     .w_full()
-                                    .child(t.login_title),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(18.))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(Theme::text_muted())
-                                    .w_full()
-                                    .child(t.login_subtitle),
+                                    .child(
+                                        div()
+                                            .text_size(px(42.))
+                                            .line_height(px(46.))
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(Theme::text())
+                                            .child(t.login_title),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(18.))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(Theme::text_muted())
+                                            .child(t.login_subtitle),
+                                    ),
                             )
                             .child(div().h(px(8.)))
                             .child(
@@ -97,18 +106,27 @@ impl Render for LoginView {
                                         )
                                     }),
                             )
-                            // Quiet language toggle, so the UI language can be
-                            // picked before signing in (settings is post-login).
-                            // A hairline sets it apart as a footer control.
-                            .child(
-                                div()
-                                    .mt(px(20.))
-                                    .pt(px(16.))
-                                    .w_full()
-                                    .border_t_1()
-                                    .border_color(Theme::surface_raised())
-                                    .child(crate::widgets::lang_switch::language_toggle(&self.state)),
-                            ),
+                    )
+                    // Footer controls pinned to the panel's bottom corners, out
+                    // of the sign-in column's way: version + "Update launcher"
+                    // on the left, the UI language on the right (settings is
+                    // post-login, so it has to be pickable here).
+                    .child(
+                        div()
+                            .absolute()
+                            .bottom(px(20.))
+                            .left(px(24.))
+                            .child(crate::widgets::update_button::update_link(
+                                &self.state,
+                                &manual_update,
+                            )),
+                    )
+                    .child(
+                        div()
+                            .absolute()
+                            .bottom(px(20.))
+                            .right(px(24.))
+                            .child(crate::widgets::lang_switch::language_toggle(&self.state)),
                     ),
             )
             .child(
@@ -171,10 +189,11 @@ fn awaiting_panel(state: &Entity<AppState>, code: String) -> gpui::AnyElement {
     let t = crate::i18n::t();
     let reopen_handle = state.clone();
     let cancel_handle = state.clone();
+    // Left-aligned like the rest of the column. Spacing groups the heading with
+    // the code it introduces (12px) and sets the secondary actions apart (16px).
     div()
         .flex()
         .flex_col()
-        .gap(px(10.))
         .w_full()
         .child(
             div()
@@ -184,11 +203,14 @@ fn awaiting_panel(state: &Entity<AppState>, code: String) -> gpui::AnyElement {
                 .child(t.login_waiting),
         )
         .child(
+            // The code is the panel's focal point: a 56px block, centered text.
             div()
-                .flex()
-                .justify_center()
+                .mt(px(12.))
+                .h(px(56.))
                 .w_full()
-                .py(px(10.))
+                .flex()
+                .items_center()
+                .justify_center()
                 .bg(Theme::surface_raised())
                 .rounded(Theme::radius_block())
                 .font_family("monospace")
@@ -199,12 +221,12 @@ fn awaiting_panel(state: &Entity<AppState>, code: String) -> gpui::AnyElement {
         )
         .child(
             div()
+                .mt(px(16.))
                 .flex()
-                .justify_center()
-                .gap(px(6.))
-                .w_full()
+                .items_center()
+                .gap(px(8.))
                 .text_size(px(13.))
-                .text_color(Theme::text_muted())
+                .text_color(Theme::text_faint())
                 .child(text_link(t.login_reopen, "login-reopen", move |_, _, cx| {
                     reopen_handle.read(cx).reopen_login_page();
                 }))

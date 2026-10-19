@@ -5,3 +5,4 @@ pub mod lang_switch;
 pub mod markdown;
 pub mod modal;
 pub mod toggle;
+pub mod update_button;

@@ -49,6 +49,7 @@ impl Render for SkinView {
         let active_launcher = self.tab == SkinTab::Launcher;
         let data_dir = self.state.read(cx).settings.data_dir.clone();
         let close_to_tray = self.state.read(cx).settings.close_to_tray;
+        let manual_update = self.state.read(cx).manual_update.clone();
         let t = crate::i18n::t();
 
         div()
@@ -148,6 +149,7 @@ impl Render for SkinView {
                                 &self.state,
                                 data_dir.clone(),
                                 close_to_tray,
+                                &manual_update,
                             ))
                             // 40% spacer mirrors the skin preview pane so the
                             // settings inputs land at the same width as skin inputs.

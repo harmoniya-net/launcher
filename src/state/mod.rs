@@ -120,12 +120,28 @@ pub enum UpdatePhase {
     Restarting,
 }
 
+/// Result of the last update the user asked for ("Update launcher" button).
+/// A found update doesn't land here: it takes over the window (`UpdatePhase`).
+#[derive(Clone, Debug, Default)]
+pub enum ManualUpdate {
+    #[default]
+    Idle,
+    Checking,
+    UpToDate,
+    /// Refused: updating relaunches the app, which would cut off a running game
+    /// or an install in progress.
+    Busy,
+    Failed,
+}
+
 pub struct AppState {
     pub route: Route,
     /// When set, the auto-updater has taken over the window (see [`UpdatePhase`]).
     pub update: Option<UpdatePhase>,
     /// When the last update check started; throttles checks on tray restore.
     pub last_update_check: Option<Instant>,
+    /// Status of the update the user asked for, shown next to its button.
+    pub manual_update: ManualUpdate,
     /// The sole owner of the session token; see [`SessionStore`].
     pub session: Arc<SessionStore>,
     pub user: Option<User>,
@@ -216,6 +232,7 @@ impl AppState {
             route: if session.signed_in() { Route::Account } else { Route::Login },
             update: None,
             last_update_check: None,
+            manual_update: ManualUpdate::Idle,
             session,
             user: None,
             modpacks: Vec::new(),

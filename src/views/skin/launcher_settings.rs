@@ -1,5 +1,5 @@
 //! The Launcher-settings tab content: install directory, close-to-tray toggle,
-//! and the UI language switcher.
+//! the UI language switcher, and updating the launcher.
 //! Extracted from `skin/page.rs` (it isn't skin-specific — only shares the nav).
 //!
 //! Mirrors the skin form's layout (`skin_form.rs`) so the two tabs feel like one
@@ -14,7 +14,7 @@ use gpui::{
 use harmoniya_launch::pipeline as launch;
 
 use crate::i18n;
-use crate::state::AppState;
+use crate::state::{AppState, ManualUpdate};
 use crate::theme::Theme;
 use crate::widgets::icon::icon;
 use crate::widgets::toggle::toggle_switch;
@@ -28,6 +28,7 @@ pub(crate) fn launcher_settings(
     state: &Entity<AppState>,
     data_dir: Option<String>,
     close_to_tray: bool,
+    manual_update: &ManualUpdate,
 ) -> gpui::AnyElement {
     div()
         .id("launcher-settings-scroll")
@@ -51,7 +52,8 @@ pub(crate) fn launcher_settings(
                 .gap(px(20.))
                 .child(install_dir_section(state, data_dir))
                 .child(close_to_tray_section(state, close_to_tray))
-                .child(language_section(state)),
+                .child(language_section(state))
+                .child(update_section(state, manual_update)),
         )
         .into_any_element()
 }
@@ -179,6 +181,13 @@ fn close_to_tray_section(state: &Entity<AppState>, on: bool) -> gpui::AnyElement
 fn language_section(state: &Entity<AppState>) -> gpui::AnyElement {
     field(i18n::t().language, i18n::t().language_desc)
         .child(crate::widgets::lang_switch::language_switcher(state))
+        .into_any_element()
+}
+
+/// The update field: update the launcher now instead of waiting for a restart.
+fn update_section(state: &Entity<AppState>, manual_update: &ManualUpdate) -> gpui::AnyElement {
+    field(i18n::t().update_title, i18n::t().update_desc)
+        .child(crate::widgets::update_button::update_row(state, manual_update))
         .into_any_element()
 }
 
