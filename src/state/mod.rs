@@ -124,6 +124,8 @@ pub struct AppState {
     pub route: Route,
     /// When set, the auto-updater has taken over the window (see [`UpdatePhase`]).
     pub update: Option<UpdatePhase>,
+    /// When the last update check started; throttles checks on tray restore.
+    pub last_update_check: Option<Instant>,
     /// The sole owner of the session token; see [`SessionStore`].
     pub session: Arc<SessionStore>,
     pub user: Option<User>,
@@ -213,6 +215,7 @@ impl AppState {
         let entity = cx.new(|_| AppState {
             route: if session.signed_in() { Route::Account } else { Route::Login },
             update: None,
+            last_update_check: None,
             session,
             user: None,
             modpacks: Vec::new(),

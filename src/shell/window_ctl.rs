@@ -44,15 +44,6 @@ pub fn show(window: &mut Window, cx: &mut App) {
     set_visible_state(true);
 }
 
-/// Flip between hidden and shown.
-pub fn toggle(window: &mut Window, cx: &mut App) {
-    if is_visible() {
-        hide(window, cx);
-    } else {
-        show(window, cx);
-    }
-}
-
 #[allow(unused_variables)]
 fn platform_hide(window: &mut Window, cx: &mut App) {
     #[cfg(target_os = "windows")]

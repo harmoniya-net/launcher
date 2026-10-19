@@ -165,8 +165,8 @@ fn sign_in_buttons(state: &Entity<AppState>) -> gpui::AnyElement {
         .into_any_element()
 }
 
-/// The code to approve in the browser, so the user can check it matches the
-/// page, plus ways out if the tab got lost or they changed their mind.
+/// The code to approve in the browser — the page asks whether it matches —
+/// plus ways out if the tab got lost or they changed their mind.
 fn awaiting_panel(state: &Entity<AppState>, code: String) -> gpui::AnyElement {
     let t = crate::i18n::t();
     let reopen_handle = state.clone();
@@ -174,7 +174,7 @@ fn awaiting_panel(state: &Entity<AppState>, code: String) -> gpui::AnyElement {
     div()
         .flex()
         .flex_col()
-        .gap(px(8.))
+        .gap(px(10.))
         .w_full()
         .child(
             div()
@@ -182,12 +182,6 @@ fn awaiting_panel(state: &Entity<AppState>, code: String) -> gpui::AnyElement {
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(Theme::text())
                 .child(t.login_waiting),
-        )
-        .child(
-            div()
-                .text_size(px(13.))
-                .text_color(Theme::text_muted())
-                .child(t.login_code_hint),
         )
         .child(
             div()
@@ -206,11 +200,15 @@ fn awaiting_panel(state: &Entity<AppState>, code: String) -> gpui::AnyElement {
         .child(
             div()
                 .flex()
-                .justify_between()
+                .justify_center()
+                .gap(px(6.))
                 .w_full()
+                .text_size(px(13.))
+                .text_color(Theme::text_muted())
                 .child(text_link(t.login_reopen, "login-reopen", move |_, _, cx| {
                     reopen_handle.read(cx).reopen_login_page();
                 }))
+                .child("·")
                 .child(text_link(t.login_cancel, "login-cancel", move |_, _, cx| {
                     cancel_handle.update(cx, |s, cx| s.cancel_login(cx));
                 })),

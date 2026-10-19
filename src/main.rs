@@ -168,16 +168,13 @@ fn start_tray(window: gpui::AnyWindowHandle, cx: &mut App) {
     cx.spawn(async move |cx: &mut gpui::AsyncApp| {
         while let Some(cmd) = rx.next().await {
             match cmd {
-                TrayCmd::Show => {
+                TrayCmd::Show => restore_window(window, cx),
+                TrayCmd::Toggle if crate::shell::window_ctl::is_visible() => {
                     let _ = cx.update_window(window, |_, window, app| {
-                        crate::shell::window_ctl::show(window, app)
+                        crate::shell::window_ctl::hide(window, app)
                     });
                 }
-                TrayCmd::Toggle => {
-                    let _ = cx.update_window(window, |_, window, app| {
-                        crate::shell::window_ctl::toggle(window, app)
-                    });
-                }
+                TrayCmd::Toggle => restore_window(window, cx),
                 TrayCmd::Quit => graceful_quit().await,
             }
         }
@@ -190,12 +187,24 @@ fn start_focus_listener(window: gpui::AnyWindowHandle, cx: &mut App) {
     let Some(mut rx) = single_instance::serve_focus() else { return };
     cx.spawn(async move |cx: &mut gpui::AsyncApp| {
         while rx.next().await.is_some() {
-            let _ = cx.update_window(window, |_, window, app| {
-                crate::shell::window_ctl::show(window, app)
-            });
+            restore_window(window, cx);
         }
     })
     .detach();
+}
+
+/// Show and focus the window (tray, or a second launch poking us). Coming back
+/// from hidden also checks for an update, so a launcher left in the tray for
+/// days doesn't stay on an old version.
+fn restore_window(window: gpui::AnyWindowHandle, cx: &mut gpui::AsyncApp) {
+    let was_hidden = !crate::shell::window_ctl::is_visible();
+    let _ = cx.update_window(window, |_, window, app| crate::shell::window_ctl::show(window, app));
+    if was_hidden {
+        let _ = cx.update(|app| {
+            let state = app.global::<AppStateHandle>().0.clone();
+            state.update(app, |s, cx| s.check_for_update_on_restore(cx));
+        });
+    }
 }
 
 /// Stop every running game gracefully (SIGTERM, ≤30s, SIGKILL), then exit. We
