@@ -1,6 +1,6 @@
 //! The bundled Harmoniya logo (SVG), rasterized at the requested size for use
-//! as the tray and app icons. Rendering from SVG keeps the mark crisp at any
-//! size (the tray/desktop icon APIs want raster pixels, so we rasterize here).
+//! as the tray icon. Rendering from SVG keeps the mark crisp at any size (the
+//! tray API wants raster pixels, so we rasterize here).
 
 use image::RgbaImage;
 use resvg::tiny_skia::{Pixmap, Transform};

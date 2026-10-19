@@ -22,7 +22,7 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use crate::app::Root;
 use crate::shell::tray::TrayCmd;
-use crate::shell::{desktop_integration, single_instance, tray};
+use crate::shell::{single_instance, tray};
 use crate::state::{AppState, AppStateHandle, MainWindow};
 
 // Ctrl/Cmd+R — manually refresh the catalog from the CMS.
@@ -79,9 +79,6 @@ fn main() {
                 let state = cx.global::<AppStateHandle>().0.clone();
                 state.update(cx, |s, cx| s.reload_modpacks(cx));
             });
-
-            // Install/refresh the .desktop entry + icons so the app shows our logo.
-            desktop_integration::ensure();
 
             // Auto-update: check for a newer release; if one exists, take over the
             // window with an updating screen, download it, and relaunch.
