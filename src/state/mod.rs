@@ -11,7 +11,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use futures::StreamExt;
 use gpui::{App, AppContext, Entity, EventEmitter, Global, Image, ImageFormat, Task};
@@ -140,6 +140,9 @@ pub struct AppState {
     pub update: Option<UpdatePhase>,
     /// When the last update check started; throttles checks on tray restore.
     pub last_update_check: Option<Instant>,
+    /// Wait before retrying the last failed automatic check; zero when the
+    /// last check went through.
+    pub update_retry_delay: Duration,
     /// Status of the update the user asked for, shown next to its button.
     pub manual_update: ManualUpdate,
     /// The sole owner of the session token; see [`SessionStore`].
@@ -232,6 +235,7 @@ impl AppState {
             route: if session.signed_in() { Route::Account } else { Route::Login },
             update: None,
             last_update_check: None,
+            update_retry_delay: Duration::ZERO,
             manual_update: ManualUpdate::Idle,
             session,
             user: None,

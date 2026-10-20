@@ -170,6 +170,18 @@ jobs:
           path: dist
           merge-multiple: true
 
+      # Launchers download their update by exact file name (src/shell/update.rs),
+      # and older launchers by the target triple in it. Never publish a release
+      # without them.
+      - name: Check updater assets
+        shell: bash
+        run: |
+          set -eu
+          for t in x86_64-unknown-linux-gnu x86_64-pc-windows-msvc aarch64-apple-darwin x86_64-apple-darwin; do
+            f="dist/harmoniya-launcher-$t.tar.gz"
+            [ -s "$f" ] || { echo "::error::missing updater asset $f"; exit 1; }
+          done
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:

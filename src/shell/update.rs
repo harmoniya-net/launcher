@@ -1,14 +1,20 @@
-//! Best-effort GitHub-Releases self-update. `self_update` is sync, so the three
-//! entry points below are blocking and must be dispatched off the UI thread (see
-//! `state::update`). The GitHub repo is public, so release assets download
-//! without auth; CI publishes one asset per target triple, which `self_update`
-//! matches against the running binary's target.
+//! Best-effort GitHub-Releases self-update. The entry points below are
+//! blocking and must be dispatched off the UI thread (see `state::update`).
+//!
+//! We never call GitHub's REST API: unauthenticated, it allows 60 requests an
+//! hour per IP, and players behind a shared IP (carrier NAT, some ISPs) get a
+//! 403 on every check, so they never update. Instead we read the newest tag
+//! from the `releases/latest` web redirect and download the asset from its
+//! plain `releases/download` URL; neither counts against that limit. CI
+//! publishes one archive per target triple (see .github/workflows/release.yml).
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
+use std::time::Duration;
 
-use anyhow::Result;
-use self_update::update::ReleaseUpdate;
+use anyhow::{anyhow, Context, Result};
+
+const REPO_URL: &str = "https://github.com/harmoniya-net/launcher";
 
 /// The launcher's own path, captured at startup *before* the updater swaps the
 /// binary. On Linux, once [`install`] replaces the executable in place,
@@ -30,36 +36,75 @@ pub fn record_exe_path() {
     }
 }
 
-/// Build the self-updater for this binary.
-fn updater() -> Result<Box<dyn ReleaseUpdate>> {
-    let mut builder = self_update::backends::github::Update::configure();
-    builder
-        .repo_owner("harmoniya-net")
-        .repo_name("launcher")
-        .bin_name("harmoniya-launcher")
-        .current_version(env!("CARGO_PKG_VERSION"))
-        .show_download_progress(false)
-        .no_confirm(true);
-    // On macOS the release archive holds a whole .app bundle (see
-    // .github/workflows/release.yml), not a bare binary at the archive root —
-    // point the extractor at the executable's exact path inside it.
-    #[cfg(target_os = "macos")]
-    builder.bin_path_in_archive("Harmoniya.app/Contents/MacOS/{{ bin }}");
-    Ok(builder.build()?)
+/// Where the executable sits inside the release archive.
+fn bin_path_in_archive() -> &'static str {
+    if cfg!(target_os = "macos") {
+        // The macOS archive holds the whole .app bundle.
+        "Harmoniya.app/Contents/MacOS/harmoniya-launcher"
+    } else if cfg!(windows) {
+        "harmoniya-launcher.exe"
+    } else {
+        "harmoniya-launcher"
+    }
+}
+
+/// The newest release's version (without the leading `v`), read from where
+/// `releases/latest` redirects to: `.../releases/tag/v0.7.3`.
+fn latest_version() -> Result<String> {
+    harmoniya_api::http::handle().block_on(async {
+        let client = reqwest::Client::builder()
+            .user_agent(concat!("harmoniya-launcher/", env!("CARGO_PKG_VERSION")))
+            .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
+            .tls_built_in_webpki_certs(true)
+            .tls_built_in_native_certs(true)
+            .build()?;
+        let resp = client
+            .head(format!("{REPO_URL}/releases/latest"))
+            .send()
+            .await
+            .map_err(|e| anyhow!("latest release: {}", harmoniya_api::obs::cause_chain(&e)))?;
+        let location = resp
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| anyhow!("latest release: HTTP {} without a redirect", resp.status()))?;
+        let tag = location
+            .rsplit_once("/releases/tag/")
+            .map(|(_, tag)| tag)
+            .ok_or_else(|| anyhow!("latest release: unexpected redirect to {location}"))?;
+        Ok(tag.trim_start_matches('v').to_string())
+    })
 }
 
 /// Check GitHub Releases for a newer build. `Some(version)` if an update is
 /// available, `None` if we're already current. Blocking (network).
 pub fn check() -> Result<Option<String>> {
-    let latest = updater()?.get_latest_release()?;
-    let newer = self_update::version::bump_is_greater(env!("CARGO_PKG_VERSION"), &latest.version)?;
-    Ok(newer.then_some(latest.version))
+    let latest = latest_version()?;
+    let newer = self_update::version::bump_is_greater(env!("CARGO_PKG_VERSION"), &latest)?;
+    Ok(newer.then_some(latest))
 }
 
-/// Download the latest release and replace the running binary, returning whether
-/// anything was installed. Blocking (network + disk); call after [`check`].
-pub fn install() -> Result<bool> {
-    Ok(updater()?.update()?.updated())
+/// Download release `version` (from [`check`]) and replace the running binary.
+/// Blocking (network + disk).
+pub fn install(version: &str) -> Result<()> {
+    let asset = format!("harmoniya-launcher-{}.tar.gz", self_update::get_target());
+    let url = format!("{REPO_URL}/releases/download/v{version}/{asset}");
+
+    let dir = self_update::TempDir::new().context("temp dir for the update")?;
+    let archive = dir.path().join(&asset);
+    let file = std::fs::File::create(&archive).context("create the update archive")?;
+    self_update::Download::from_url(&url)
+        .download_to(file)
+        .with_context(|| format!("download {url}"))?;
+
+    self_update::Extract::from_source(&archive)
+        .extract_file(dir.path(), bin_path_in_archive())
+        .context("unpack the update")?;
+    self_update::self_replace::self_replace(dir.path().join(bin_path_in_archive()))
+        .context("replace the launcher executable")?;
+    Ok(())
 }
 
 /// Re-exec the (freshly updated) binary and exit this process. Never returns.

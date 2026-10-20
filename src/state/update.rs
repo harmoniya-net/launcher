@@ -13,9 +13,13 @@ use harmoniya_launch::pipeline::LaunchState;
 use super::{AppState, LoginPhase, ManualUpdate, UpdatePhase};
 use crate::shell::update;
 
-/// Minimum gap between checks. The updater asks GitHub's API unauthenticated,
-/// which allows 60 requests an hour per IP (shared by a whole household).
+/// Minimum gap between checks on tray restore.
 const RECHECK_AFTER: Duration = Duration::from_secs(60 * 60);
+
+/// Retrying a failed automatic check (no network yet at boot, a blip): wait
+/// this long first, doubling up to [`RETRY_MAX`].
+const RETRY_FIRST: Duration = Duration::from_secs(60);
+const RETRY_MAX: Duration = Duration::from_secs(30 * 60);
 
 /// Run a blocking closure on a throwaway thread and await its result, so the
 /// (sync) `self_update` network/disk work never blocks the UI or executor pools.
@@ -74,6 +78,21 @@ impl AppState {
         self.run_update(false, cx);
     }
 
+    /// A check failed. Let the next tray restore check again right away, and
+    /// retry on our own with a growing delay. The retry goes through the
+    /// restore path, so it skips itself if another check ran in the meantime
+    /// or a game is running (the next restore then picks it up).
+    fn retry_update_check(&mut self, cx: &mut Context<Self>) {
+        self.last_update_check = None;
+        let delay = (self.update_retry_delay * 2).clamp(RETRY_FIRST, RETRY_MAX);
+        self.update_retry_delay = delay;
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(delay).await;
+            let _ = this.update(cx, |s, cx| s.check_for_update_on_restore(cx));
+        })
+        .detach();
+    }
+
     /// `manual`: the user asked (button) — report the outcome, and don't wait
     /// for a pending sign-in.
     fn run_update(&mut self, manual: bool, cx: &mut Context<Self>) {
@@ -93,10 +112,12 @@ impl AppState {
                 Some(Ok(None)) => return report(ManualUpdate::UpToDate, cx),
                 Some(Err(e)) => {
                     tracing::warn!(error = %harmoniya_api::obs::Chain(&e), "update check failed");
+                    let _ = this.update(cx, |s, cx| s.retry_update_check(cx));
                     return report(ManualUpdate::Failed, cx);
                 }
                 None => return report(ManualUpdate::Failed, cx),
             };
+            let _ = this.update(cx, |s, _| s.update_retry_delay = Duration::ZERO);
 
             // Take over the window, then download + install — unless the user
             // started something while we were checking; the next restore retries.
@@ -105,7 +126,7 @@ impl AppState {
                 if blocked {
                     return false;
                 }
-                s.update = Some(UpdatePhase::Downloading(version));
+                s.update = Some(UpdatePhase::Downloading(version.clone()));
                 s.manual_update = ManualUpdate::Idle;
                 cx.notify();
                 true
@@ -114,8 +135,9 @@ impl AppState {
                 return report(ManualUpdate::Busy, cx);
             }
 
-            match off_thread(update::install).await {
-                Some(Ok(true)) => {
+            let install_version = version.clone();
+            match off_thread(move || update::install(&install_version)).await {
+                Some(Ok(())) => {
                     let _ = this.update(cx, |s, cx| {
                         s.update = Some(UpdatePhase::Restarting);
                         cx.notify();
@@ -130,7 +152,7 @@ impl AppState {
                     if let Some(Err(e)) = other {
                         tracing::warn!(error = %harmoniya_api::obs::Chain(&e), "update install failed");
                     }
-                    // Nothing installed (or it failed) — drop the screen, carry on.
+                    // It failed: drop the screen, carry on.
                     let _ = this.update(cx, |s, cx| {
                         s.update = None;
                         if manual {
