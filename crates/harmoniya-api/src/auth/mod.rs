@@ -19,7 +19,7 @@ use crate::http;
 use crate::obs::cause_chain;
 pub use store::SessionStore;
 
-pub const ACCOUNT_SERVICE_BASE: &str = "https://harmoniya.net";
+pub const ACCOUNT_SERVICE_BASE: &str = "https://harmoniya.net/account";
 /// Must match `LAUNCHER_CLIENT_ID` in the account service.
 const CLIENT_ID: &str = "launcher";
 const DEVICE_CODE_GRANT: &str = "urn:ietf:params:oauth:grant-type:device_code";
