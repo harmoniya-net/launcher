@@ -35,7 +35,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          # Pinned to an older Ubuntu on purpose: a binary only runs on
+          # glibc >= the one it was built against. ubuntu-latest moved to
+          # glibc 2.43, which broke the launcher on distros like Void (2.41).
+          # 22.04 = glibc 2.35. Don't bump this without a reason.
+          - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             archive: harmoniya-launcher-x86_64-unknown-linux-gnu.tar.gz
             raw: harmoniya-launcher-linux
@@ -64,7 +68,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: release-${{ matrix.target }}
+          shared-key: release-${{ matrix.os }}-${{ matrix.target }}
 
       # System libraries GPUI links on Linux (xcb + xkbcommon).
       - name: Install Linux deps
@@ -78,6 +82,22 @@ jobs:
 
       - name: Build
         run: cargo build --release --locked --target ${{ matrix.target }}
+
+      # Fail the release if the Linux binary needs a newer glibc than 2.35,
+      # so a runner or dependency change can't silently lock users out.
+      - name: Check glibc requirement (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="target/${{ matrix.target }}/release/harmoniya-launcher"
+          max=$(objdump -T "$bin" | grep -oE 'GLIBC_2\.[0-9]+' | sort -t. -k2 -n -u | tail -1)
+          echo "Highest glibc symbol: $max"
+          if [ "${max#GLIBC_2.}" -gt 35 ]; then
+            echo "::error::Binary requires $max (limit GLIBC_2.35)"
+            objdump -T "$bin" | grep -E "GLIBC_2\.(3[6-9]|[4-9][0-9])"
+            exit 1
+          fi
 
       # Archive (self-updater's download source, name carries the triple) +
       # raw binary (stable direct-download link, name deliberately has no
