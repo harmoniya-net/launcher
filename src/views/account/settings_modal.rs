@@ -86,13 +86,13 @@ impl SettingsModal {
 
     /// Whether an option is hidden by the player's permissions. A
     /// `Feature` requires `harmoniya.launcher.feature.{name}`; hidden by default
-    /// until the lucky profile loads (so features don't flash in then vanish).
+    /// until the jus permissions load (so features don't flash in then vanish).
     fn field_hidden(&self, option: &OptionDef, cx: &Context<Self>) -> bool {
         match option {
             OptionDef::Feature { name, .. } => self
                 .state
                 .read(cx)
-                .lucky_profile
+                .permissions
                 .as_ref()
                 .is_none_or(|p| !p.can_view_feature(name)),
             _ => false,

@@ -24,7 +24,7 @@ impl AccountView {
             if s.user.is_none() { s.fetch_user(cx); }
             if s.modpacks.is_empty() && !s.modpacks_loading { s.fetch_modpacks(cx); }
             if s.skin_profile.is_none() { s.fetch_skin_profile(cx); }
-            if s.lucky_profile.is_none() { s.fetch_lucky_profile(cx); }
+            s.connect_jus(cx);
         });
 
         Self { server_list, user_bar, right_panel }

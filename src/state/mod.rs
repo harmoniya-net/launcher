@@ -21,7 +21,7 @@ use harmoniya_api::auth::{self, SessionStore};
 use harmoniya_api::config;
 use harmoniya_api::services::{
     account::User,
-    lucky::LuckyProfile,
+    jus::{JusConnection, Permissions},
     modpacks::{Modpack, ProjectGroup},
     yggdrasil::{SkinModel, SkinProfile},
 };
@@ -31,7 +31,7 @@ use harmoniya_launch::pipeline::{CancellationToken, LaunchState};
 mod catalog;
 mod discord;
 mod launch_flow;
-mod lucky;
+mod jus;
 mod session;
 mod skin;
 mod ui;
@@ -161,7 +161,12 @@ pub struct AppState {
     pub favourites: HashSet<String>,
     pub settings: Settings,
     pub login_phase: LoginPhase,
-    pub lucky_profile: Option<LuckyProfile>,
+    /// The player's launcher permissions, live from jus; `None` until the
+    /// first snapshot arrives (and while signed out).
+    pub permissions: Option<Permissions>,
+    /// The jus socket that keeps `permissions` current; see [`AppState::connect_jus`].
+    pub jus: Option<JusConnection>,
+    pub jus_task: Option<Task<()>>,
     pub skin_profile: Option<SkinProfile>,
     /// Locally overridden skin model for live preview in the viewer; cleared
     /// after the next successful skin upload sync.
@@ -249,7 +254,9 @@ impl AppState {
             favourites,
             settings,
             login_phase: LoginPhase::Idle,
-            lucky_profile: None,
+            permissions: None,
+            jus: None,
+            jus_task: None,
             skin_profile: None,
             preview_skin_model: None,
             preview_skin_bytes: None,

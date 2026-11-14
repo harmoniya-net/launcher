@@ -120,7 +120,7 @@ impl AppState {
             });
         }
         self.user = None;
-        self.lucky_profile = None;
+        self.disconnect_jus();
         self.skin_profile = None;
         self.head_cache.clear();
         self.set_route(Route::Login, cx);

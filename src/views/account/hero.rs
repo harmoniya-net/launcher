@@ -49,9 +49,9 @@ impl Render for Hero {
         };
         let authed = state.session.signed_in();
         let server = &modpack.id;
-        let lucky = state.lucky_profile.as_ref();
-        let can_play = lucky.is_some_and(|p| p.can_play_modpack(server));
-        let can_bypass = lucky.is_some_and(|p| p.can_bypass_maintenance(server));
+        let perms = state.permissions.as_ref();
+        let can_play = perms.is_some_and(|p| p.can_play_modpack(server));
+        let can_bypass = perms.is_some_and(|p| p.can_bypass_maintenance(server));
         let play_state = if !authed {
             PlayState::Unauthenticated
         } else if modpack.maintaining && !can_bypass {

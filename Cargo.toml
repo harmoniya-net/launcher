@@ -66,6 +66,9 @@ open = "5"
 # its head — the options a player may set — is typed.
 opys-runtime = "0.10.0"
 opys-bundle = "0.10.0"
+# jus (permissions) client: the /events replica + resolver. Public GitLab repo,
+# pinned by tag (GitLab.com's Cargo registry isn't available to us yet).
+jus-client = { git = "https://gitlab.com/harmoniya/modding/jus/rust.git", tag = "v0.1.0" }
 libc = "0.2"
 
 [dependencies]

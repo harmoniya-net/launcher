@@ -225,7 +225,7 @@ impl Render for ServerList {
         let groups = state.groups.clone();
         let modpacks = state.modpacks.clone();
         let favourites = state.favourites.clone();
-        let lucky = state.lucky_profile.clone();
+        let perms = state.permissions.clone();
         let loading = state.modpacks_loading;
         let error = state.modpacks_error.clone();
         let logo_cache = state.logo_cache.clone();
@@ -247,7 +247,7 @@ impl Render for ServerList {
             list = list.child(empty(crate::i18n::t().no_modpacks));
         } else {
             let can_view = |m: &Modpack| {
-                lucky.as_ref().is_some_and(|p| p.can_view_modpack(&m.id))
+                perms.as_ref().is_some_and(|p| p.can_view_modpack(&m.id))
             };
             // Favourites group first — pinned modpacks moved out of their projects.
             let favs: Vec<Modpack> = modpacks
