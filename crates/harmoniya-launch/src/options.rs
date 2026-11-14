@@ -101,10 +101,15 @@ pub fn fmt_num(n: f64) -> String {
     }
 }
 
+/// The language shown where a text has neither the player's nor any of its
+/// dialects. A bundle names no language of its own, so the fallback is the
+/// launcher's, the same for every modpack.
+pub const FALLBACK_LANG: &str = "en";
+
 /// The text to show a player whose UI is in `lang` (a language tag, `uk` or
-/// `en`): that language, else the head's `locale`, else whatever there is.
-/// A plain string is in the head's locale and is the only text there is.
-pub fn localize<'a>(text: &'a Localized, lang: &str, locale: Option<&str>) -> &'a str {
+/// `en`): that language, else [`FALLBACK_LANG`], else whatever there is.
+/// A plain string is the same in every language.
+pub fn localize<'a>(text: &'a Localized, lang: &str) -> &'a str {
     let map = match text {
         Localized::Plain(text) => return text,
         Localized::Translated(map) => map,
@@ -117,7 +122,7 @@ pub fn localize<'a>(text: &'a Localized, lang: &str, locale: Option<&str>) -> &'
         })
     };
     pick(lang)
-        .or_else(|| locale.and_then(pick))
+        .or_else(|| pick(FALLBACK_LANG))
         .or_else(|| map.values().next())
         .map(String::as_str)
         // A translated text is never empty (it does not decode otherwise).
@@ -132,7 +137,6 @@ mod tests {
     /// options of its own, and texts both plain and translated.
     const HEAD: &str = r#"{
       "format": 1,
-      "locale": "en",
       "options": [
         {"slider": "xmx", "title": {"en": "Memory", "uk": "Пам'ять"}, "min": 1024, "max": 16384,
          "step": 512, "unit": "MB", "default": 4096},
@@ -180,19 +184,18 @@ mod tests {
     }
 
     #[test]
-    fn text_is_shown_in_the_ui_language_then_the_heads_then_any() {
+    fn text_is_shown_in_the_ui_language_then_the_launchers_then_any() {
         let head = head();
         let OptionDef::Slider { label, unit, .. } = &head.options.as_slice()[0] else {
             panic!("the first option is a slider");
         };
-        let locale = head.locale.as_deref();
-        assert_eq!(localize(&label.title, "uk", locale), "Пам'ять");
-        assert_eq!(localize(&label.title, "en", locale), "Memory");
-        assert_eq!(localize(&label.title, "en-GB", locale), "Memory");
-        assert_eq!(localize(&label.title, "de", locale), "Memory", "falls back to the head's locale");
-        assert_eq!(localize(unit.as_ref().unwrap(), "uk", locale), "MB", "a plain string is all there is");
+        assert_eq!(localize(&label.title, "uk"), "Пам'ять");
+        assert_eq!(localize(&label.title, "en"), "Memory");
+        assert_eq!(localize(&label.title, "en-GB"), "Memory");
+        assert_eq!(localize(&label.title, "de"), "Memory", "falls back to the launcher's language");
+        assert_eq!(localize(unit.as_ref().unwrap(), "uk"), "MB", "a plain string is all there is");
 
         let only_uk: Localized = serde_json::from_str(r#"{"uk": "Тільки"}"#).unwrap();
-        assert_eq!(localize(&only_uk, "en", Some("en")), "Тільки", "else whatever there is");
+        assert_eq!(localize(&only_uk, "de"), "Тільки", "else whatever there is");
     }
 }

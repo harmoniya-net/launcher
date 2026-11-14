@@ -4,10 +4,10 @@
 //!
 //!     cargo run -p harmoniya-launch --example bundle_head -- <bundle url>
 
-use harmoniya_launch::options::{self, Head, ModpackOptions, OptionDef};
+use harmoniya_launch::options::{self, ModpackOptions, OptionDef};
 
-fn print_options(options: &[OptionDef], head: &Head, lang: &str, depth: usize) {
-    let tr = |text| options::localize(text, lang, head.locale.as_deref());
+fn print_options(options: &[OptionDef], lang: &str, depth: usize) {
+    let tr = |text| options::localize(text, lang);
     for option in options {
         let label = option.label();
         let pad = "  ".repeat(depth + 1);
@@ -28,7 +28,7 @@ fn print_options(options: &[OptionDef], head: &Head, lang: &str, depth: usize) {
         };
         println!("{pad}{} `{}`: {kind}{subtitle}", tr(&label.title), option.name());
         if let OptionDef::Feature { options, .. } = option {
-            print_options(options, head, lang, depth + 1);
+            print_options(options, lang, depth + 1);
         }
     }
 }
@@ -43,10 +43,10 @@ fn main() {
             std::process::exit(1);
         }
     };
-    println!("format {}, locale {:?}, {} option(s)", head.format, head.locale, head.options.as_slice().len());
+    println!("format {}, {} option(s)", head.format, head.options.as_slice().len());
     for lang in ["uk", "en"] {
         println!("[{lang}]");
-        print_options(head.options.as_slice(), &head, lang, 0);
+        print_options(head.options.as_slice(), lang, 0);
     }
     let (vars, features) = options::resolve(&head.options, &ModpackOptions::default());
     println!("defaults resolve to vars {vars:?}, features {features:?}");
