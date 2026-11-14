@@ -93,7 +93,7 @@ impl AppState {
                         state.modpacks = items;
                         state.prefetch_banners(cx);
                         state.prefetch_logos(cx);
-                        state.fetch_lucky_profile(cx);
+                        state.connect_jus(cx);
                         cx.emit(AppEvent::ModpacksLoaded);
                         cx.notify();
                     }

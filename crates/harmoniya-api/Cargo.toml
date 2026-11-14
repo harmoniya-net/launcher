@@ -21,3 +21,4 @@ serde_urlencoded = { workspace = true }
 percent-encoding = { workspace = true }
 keyring = { workspace = true }
 open = { workspace = true }
+jus-client = { workspace = true }

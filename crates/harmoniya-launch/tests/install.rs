@@ -18,7 +18,6 @@ const OPTIONS_TXT: &[u8] = b"fancyGraphics:true\n";
 
 const HEAD: &str = r#"{
   "format": 1,
-  "locale": "en",
   "options": [
     {"slider": "xmx", "title": {"en": "Memory", "uk": "Пам'ять"}, "unit": "MB",
      "min": 2048, "max": 8192, "step": 512, "default": 4096},

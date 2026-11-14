@@ -3,6 +3,6 @@
 
 pub mod account;
 pub mod group;
-pub mod lucky;
+pub mod jus;
 pub mod modpacks;
 pub mod yggdrasil;

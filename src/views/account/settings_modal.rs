@@ -86,41 +86,38 @@ impl SettingsModal {
 
     /// Whether an option is hidden by the player's permissions. A
     /// `Feature` requires `harmoniya.launcher.feature.{name}`; hidden by default
-    /// until the lucky profile loads (so features don't flash in then vanish).
+    /// until the jus permissions load (so features don't flash in then vanish).
     fn field_hidden(&self, option: &OptionDef, cx: &Context<Self>) -> bool {
         match option {
             OptionDef::Feature { name, .. } => self
                 .state
                 .read(cx)
-                .lucky_profile
+                .permissions
                 .as_ref()
                 .is_none_or(|p| !p.can_view_feature(name)),
             _ => false,
         }
     }
 
-    /// One option. `enabled` is false for children under a disabled feature;
-    /// `locale` is the head's, what a plain-string text is written in.
-    #[allow(clippy::too_many_arguments)]
+    /// One option. `enabled` is false for children under a disabled feature.
     fn field_view(
         &self,
         modpack_id: &str,
         option: &OptionDef,
-        locale: Option<&str>,
         saved: &ModpackOptions,
         enabled: bool,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let handle = &self.state;
-        let tr = |text: &Localized| localized(text, locale);
+        let tr = |text: &Localized| localized(text);
         let card = |label: &Label, control| {
             let subtitle = label.subtitle.as_ref().map(tr);
             field_card(&tr(&label.title), subtitle.as_deref(), enabled, control)
         };
         match option {
             OptionDef::Feature { name, label, default, options } => {
-                self.feature_view(modpack_id, name, label, *default, options, locale, saved, window, cx)
+                self.feature_view(modpack_id, name, label, *default, options, saved, window, cx)
             }
             OptionDef::Slider { name, label, min, max, step, default, unit } => {
                 let unit = unit.as_ref().map(tr);
@@ -131,7 +128,7 @@ impl SettingsModal {
             }
             OptionDef::Select { name, label, choices, default } => card(
                 label,
-                select_control(handle, modpack_id, name, choices, default, locale, saved, enabled),
+                select_control(handle, modpack_id, name, choices, default, saved, enabled),
             ),
             OptionDef::File { name, label } => {
                 card(label, path_control(handle, modpack_id, name, false, saved, enabled))
@@ -157,7 +154,6 @@ impl SettingsModal {
         label: &Label,
         default: bool,
         options: &[OptionDef],
-        locale: Option<&str>,
         saved: &ModpackOptions,
         window: &Window,
         cx: &mut Context<Self>,
@@ -171,8 +167,8 @@ impl SettingsModal {
                 h.update(cx, |s, cx| s.set_feature(mid.clone(), nm.clone(), !on, cx));
             });
 
-        let title = localized(&label.title, locale);
-        let subtitle = label.subtitle.as_ref().map(|s| localized(s, locale));
+        let title = localized(&label.title);
+        let subtitle = label.subtitle.as_ref().map(localized);
         let header = div()
             .flex()
             .items_center()
@@ -187,7 +183,7 @@ impl SettingsModal {
                 continue;
             }
             col = col.child(
-                div().pl(px(12.)).child(self.field_view(modpack_id, child, locale, saved, on, window, cx)),
+                div().pl(px(12.)).child(self.field_view(modpack_id, child, saved, on, window, cx)),
             );
         }
         col.into_any_element()
@@ -477,7 +473,6 @@ impl Render for SettingsModal {
         let head = self.state.read(cx).bundle_heads.get(&m.bundle_url).cloned().unwrap_or_default();
         let schema: Vec<OptionDef> =
             head.head.as_ref().map(|h| h.options.as_slice().to_vec()).unwrap_or_default();
-        let locale = head.head.as_ref().and_then(|h| h.locale.clone());
         let saved = self.state.read(cx).settings.modpack_options.get(&m.id).cloned().unwrap_or_default();
 
         // Ensure a focus handle exists for every text field.
@@ -520,7 +515,7 @@ impl Render for SettingsModal {
             if self.field_hidden(option, cx) {
                 continue;
             }
-            col = col.child(self.field_view(&m.id, option, locale.as_deref(), &saved, true, window, cx));
+            col = col.child(self.field_view(&m.id, option, &saved, true, window, cx));
         }
 
         // While a slider is dragged, track the cursor at the window level so it

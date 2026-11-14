@@ -44,11 +44,11 @@ impl Render for SkinForm {
         let model = self.current_model(cx);
         let saving = self.editor.saving;
         let status = self.editor.status.clone();
-        let lucky = self.state.read(cx).lucky_profile.clone();
-        let can_skin = lucky.as_ref().is_none_or(|p| p.can_upload_skin());
-        let can_skin_hd = lucky.as_ref().is_none_or(|p| p.can_upload_skin_hd());
-        let can_cape = lucky.as_ref().is_none_or(|p| p.can_upload_cape());
-        let can_cape_hd = lucky.as_ref().is_none_or(|p| p.can_upload_cape_hd());
+        let perms = self.state.read(cx).permissions.clone();
+        let can_skin = perms.as_ref().is_none_or(|p| p.can_upload_skin());
+        let can_skin_hd = perms.as_ref().is_none_or(|p| p.can_upload_skin_hd());
+        let can_cape = perms.as_ref().is_none_or(|p| p.can_upload_cape());
+        let can_cape_hd = perms.as_ref().is_none_or(|p| p.can_upload_cape_hd());
 
         let t = crate::i18n::t();
         let skin_name = self.editor.pending_skin.as_ref().map(|(_, n)| n.clone()).unwrap_or_else(|| t.no_file.into());

@@ -22,9 +22,7 @@ impl Render for UserBar {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let state = self.state.read(cx);
         let user = state.user.clone();
-        let rank = state.selected_modpack().and_then(|m| {
-            state.lucky_profile.as_ref()?.rank_for(&m.title.to_lowercase())
-        });
+        let rank = state.permissions.as_ref().and_then(|p| p.rank());
         let head = state
             .skin_profile
             .as_ref()
